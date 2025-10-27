@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* CVAT-inspired color scheme */
+  --cvat-primary: #1890ff;
+  --cvat-primary-hover: #40a9ff;
+  --cvat-primary-active: #096dd9;
+  --cvat-success: #52c41a;
+  --cvat-warning: #faad14;
+  --cvat-error: #ff4d4f;
+  --cvat-info: #1890ff;
+  
+  /* Background colors */
+  --cvat-bg-primary: #f5f5f5;
+  --cvat-bg-secondary: #ffffff;
+  --cvat-bg-tertiary: #fafafa;
+  --cvat-bg-header: #001529;
+  --cvat-bg-header-light: #002140;
+  
+  /* Text colors */
+  --cvat-text-primary: #262626;
+  --cvat-text-secondary: #595959;
+  --cvat-text-tertiary: #8c8c8c;
+  --cvat-text-white: #ffffff;
+  
+  /* Border colors */
+  --cvat-border: #d9d9d9;
+  --cvat-border-light: #f0f0f0;
+  --cvat-border-dark: #434343;
+  
+  /* Shadow */
+  --cvat-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --cvat-shadow-light: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+body {
+  color: var(--cvat-text-primary);
+  background: var(--cvat-bg-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  line-height: 1.5715;
+}
+
+/* CVAT-style components */
+.cvat-card {
+  background: var(--cvat-bg-secondary);
+  border: 1px solid var(--cvat-border);
+  border-radius: 6px;
+  box-shadow: var(--cvat-shadow-light);
+}
+
+.cvat-button-primary {
+  background: var(--cvat-primary);
+  border-color: var(--cvat-primary);
+  color: var(--cvat-text-white);
+  border-radius: 6px;
+  font-weight: 400;
+  transition: all 0.3s;
+}
+
+.cvat-button-primary:hover {
+  background: var(--cvat-primary-hover);
+  border-color: var(--cvat-primary-hover);
+  color: var(--cvat-text-white);
+}
+
+.cvat-header {
+  background: var(--cvat-bg-header);
+  color: var(--cvat-text-white);
+  box-shadow: var(--cvat-shadow);
+}
+
+.cvat-nav-item {
+  color: rgba(255, 255, 255, 0.85);
+  transition: all 0.15s ease-out;
+}
+
+.cvat-nav-item:hover {
+  color: var(--cvat-text-white);
+  background: var(--cvat-bg-header-light);
+}
+
+.cvat-nav-item.active {
+  color: var(--cvat-text-white);
+  background: var(--cvat-primary);
+}
