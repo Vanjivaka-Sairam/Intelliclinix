@@ -5,7 +5,7 @@ from db import get_db
 import cvat_sdk.api_client
 from utils.security import hash_password, verify_password,create_jwt_token
 from datetime import datetime
-
+from bson.objectid import ObjectId
 from services.cvat_api import create_cvat_user
 
 auth_bp = Blueprint('auth', __name__)
@@ -52,8 +52,8 @@ def signup():
         )
         if cvat_user and cvat_user.id:
             db.users.update_one(
-                {"_id": user_id},
-                {"$set": {"cvat_user_id": cvat_user.id}}
+                {"_id": ObjectId(user_id)},
+                {"$set": {"cvat_user_id": cvat_user['id']}}
             )
     except Exception as e:
         print(f"Critical: Failed to create corresponding CVAT user for {user_data.username}: {e}")
@@ -75,7 +75,7 @@ def login():
         return jsonify({"error": "Invalid username or password"}), 401
     db.users.update_one(
         {"_id": user['_id']},
-        {"$set": {"last_login": datetime.utcnow()}}
+        {"$set": {"last_login": datetime.datetime.utcnow()}}
     )
 
     token = create_jwt_token(identity=str(user['_id']))
