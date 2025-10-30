@@ -1,2 +1,26 @@
 /cvat
 /server/venv
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+.env
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# Logs
+*.log

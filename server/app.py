@@ -1,6 +1,7 @@
 from flask import Flask, jsonify
 from config import config
-from server.db import init_db
+from db import init_db
+from blueprints.auth import auth_bp
 import commands
 
 def create_app(config_name = 'default'):
@@ -9,7 +10,7 @@ def create_app(config_name = 'default'):
     init_db(app)
     commands.register_commands(app)
     #we need to register all the blueprints below
-
+    app.register_blueprint(auth_bp, url_prefix='/auth')
 
     app.register_blueprint(blueprint=, url pred )
     @app.route('/health')
