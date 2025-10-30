@@ -11,7 +11,7 @@ def create_app(config_name = 'default'):
     #we need to register all the blueprints below
 
 
-
+    app.register_blueprint(blueprint=, url pred )
     @app.route('/health')
     def health_check():
         return jsonify({"status" : "ok"})
