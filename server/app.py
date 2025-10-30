@@ -11,8 +11,7 @@ def create_app(config_name = 'default'):
     commands.register_commands(app)
     #we need to register all the blueprints below
     app.register_blueprint(auth_bp, url_prefix='/auth')
-
-    app.register_blueprint(blueprint=, url pred )
+    
     @app.route('/health')
     def health_check():
         return jsonify({"status" : "ok"})

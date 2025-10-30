@@ -1,52 +1,89 @@
-from flask import current_app
-from cvat_sdk import make_client
-from cvat_sdk.core.proxies.users import User
-from cvat_sdk.exceptions import ApiException
+import os
+from pprint import pprint
+from flask import Flask, request, jsonify
+from cvat_sdk.api_client import Configuration, ApiClient, exceptions
+from cvat_sdk.api_client.models import RegisterSerializerExRequest, LoginSerializerExRequest
+
+CVAT_HOST = os.getenv('CVAT_API_URL')
+CVAT_ADMIN_USERNAME = os.getenv('CVAT_API_USER') 
+CVAT_ADMIN_PASSWORD = os.getenv('CVAT_API_PASSWORD') 
 
 
-def get_admin_client():
-    """Get authenticated CVAT client using admin credentials"""
-    return make_client(
-        host=current_app.config['CVAT_API_URL'].replace('/api', ''),
-        credentials=(
-            current_app.config['CVAT_ADMIN_USER'],
-            current_app.config['CVAT_ADMIN_PASSWORD']
-        )
+def create_cvat_user(username: str, email: str, password: str, first_name: str, last_name: str):
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Missing JSON body"}), 400
+
+    required_fields = ["username", "email", "password", "first_name", "last_name"]
+    for f in required_fields:
+        if f not in data:
+            return jsonify({"error": f"Missing field: {f}"}), 400
+    configuration = Configuration(
+        host=CVAT_HOST,
+        username=CVAT_ADMIN_USERNAME,
+        password=CVAT_ADMIN_PASSWORD,
     )
 
-
-def create_cvat_user(username, email, password, first_name, last_name) -> User:
-    """Create a user in CVAT using the admin account"""
-    with get_admin_client() as client:
-        try:
-            user = client.users.create({
-                'username': username,
-                'first_name': first_name,
-                'last_name': last_name,
-                'email': email,
-                'password': password
-            })
-            return user
-        except ApiException as e:
-            print(f"Error creating CVAT user {username}: {e}")
-            return None
-
-
-def login_and_get_token(username, password) -> str:
-    """Login to CVAT for a user and get an API token."""
-    host_url = current_app.config['CVAT_API_URL'].replace('/api', '')
-    
-    with make_client(host=host_url, credentials=(username, password)) as client:
-        try:
-            return client.api_client.configuration.api_key.get('Authorization', '').replace('Token ', '')
-        except ApiException as e:
-            print(f"Failed to log in to CVAT as user {username}: {e}")
-            return None
-
-
-def logout_and_invalidate_token(client):
-    """Logout from CVAT and invalidate the API token used by the client."""
     try:
-        print("CVAT API token invalidated successfully.")
-    except ApiException as e:
-        print(f"Error invalidating CVAT token: {e}")
+        with ApiClient(configuration) as api_client:
+            register_request = RegisterSerializerExRequest(
+                username=username,
+                email=email,
+                password1=password,
+                password2=password,
+                first_name=first_name,
+                last_name=last_name,
+            )
+
+            (created_user, response) = api_client.auth_api.create_register(register_request)
+            return jsonify({"message": "User registered successfully", "data": created_user.to_dict()}), 201
+
+    except exceptions.ApiException as e:
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
+
+def cvat_login(host: str, username: str, password: str, email: str = None):
+
+    configuration = Configuration(
+        host=CVAT_HOST,
+        username=CVAT_ADMIN_USERNAME,
+        password=CVAT_ADMIN_PASSWORD,
+    )
+
+    with ApiClient(configuration) as api_client:
+        login_request = LoginSerializerExRequest(
+            username=username,
+            email=email or "",
+            password=password,
+        )
+
+        try:
+            (data, response) = api_client.auth_api.create_login(login_request)
+            pprint(data)
+            return data.to_dict()
+        except exceptions.ApiException as e:
+            print(f"Exception when calling AuthApi.create_login(): {e}")
+            return {"error": str(e)}
+        except Exception as e:
+            print(f"Unexpected error during login: {e}")
+            return {"error": str(e)}
+
+def cvat_logout():
+    configuration = Configuration(
+        host=CVAT_HOST,
+        username=CVAT_ADMIN_USERNAME,
+        password=CVAT_ADMIN_PASSWORD,
+    )
+
+    with ApiClient(configuration) as api_client:
+        try:
+            (data, response) = api_client.auth_api.create_logout()
+            pprint(data)
+            return {"message": "User logged out successfully", "data": data.to_dict() if data else {}}
+        except exceptions.ApiException as e:
+            print(f"Exception when calling AuthApi.create_logout(): {e}")
+            return {"error": str(e)}
+        except Exception as e:
+            print(f"Unexpected error during logout: {e}")
+            return {"error": str(e)}
