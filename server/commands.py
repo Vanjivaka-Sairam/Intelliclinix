@@ -1,15 +1,16 @@
 import click
 from flask.cli import with_appcontext
-from db import get_db 
+from db import get_db
 
 @click.command('init-db')
 @with_appcontext
 def init_db_command():
-    
-    db = get_db
+    """Drops existing collections and creates them with validators."""
+    db = get_db()
     
     click.echo("Applying database validators...")
 
+    # --- Schemas ---
     collections_to_validate = {
         'users': {
             '$jsonSchema': {
@@ -54,35 +55,19 @@ def init_db_command():
                 }
             }
         },
-        'models': {
-            '$jsonSchema': {
-                'bsonType': 'object',
-                'required': ['name', 'version', 'owner_id', 'created_at', 'artifact_id', 'runner_name'],
-                'properties': {
-                    'name': {'bsonType': 'string'},
-                    'version': {'bsonType': 'string'},
-                    'owner_id': {'bsonType': 'objectId'},
-                    'runner_name': {'bsonType': 'string'},
-                    'description': {'bsonType': 'string'},
-                    'framework': {'bsonType': 'string'},
-                    'hyperparameters': {'bsonType': 'object'},
-                    'artifact_id': {'bsonType': 'objectId'},
-                    'metrics': {'bsonType': 'object'},
-                    'created_at': {'bsonType': 'date'}
-                }
-            }
-        },
         'inferences': {
             '$jsonSchema': {
                 'bsonType': 'object',
-                'required': ['dataset_id', 'model_id', 'requested_by', 'status', 'created_at'],
+                'required': ['dataset_id', 'requested_by', 'status', 'created_at'],
                 'properties': {
                     'dataset_id': {'bsonType': 'objectId'},
-                    'model_id': {'bsonType': 'objectId'},
                     'requested_by': {'bsonType': 'objectId'},
                     'params': {'bsonType': 'object'},
                     'status': {'enum': ['queued', 'running', 'completed', 'failed']},
                     'notes': {'bsonType': 'string'},
+                    # Results schema is flexible, no change needed here.
+                    # It will store objects like:
+                    # { source_filename: "...", class_mask_id: "...", instance_mask_id: "..." }
                     'results': {'bsonType': 'array', 'items': {'bsonType': 'object'}},
                     'created_at': {'bsonType': 'date'},
                     'finished_at': {'bsonType': 'date'}
@@ -106,3 +91,5 @@ def init_db_command():
 
 def register_commands(app):
     app.cli.add_command(init_db_command)
+
+
