@@ -8,6 +8,24 @@ CVAT_HOST = os.getenv('CVAT_API_URL')
 CVAT_ADMIN_USERNAME = os.getenv('CVAT_API_USER') 
 CVAT_ADMIN_PASSWORD = os.getenv('CVAT_API_PASSWORD') 
 
+def get_cvat_user_id():
+    from cvat_sdk.core.helpers import make_client
+    configuration = Configuration(
+        host=CVAT_HOST,
+        username=CVAT_ADMIN_USERNAME,
+        password=CVAT_ADMIN_PASSWORD,
+    )
+    with ApiClient(configuration) as api_client:
+        with make_client(current_app.config["CVAT_API_URL"]) as client:
+            client.login(
+                CVAT_ADMIN_USERNAME,
+                CVAT_ADMIN_PASSWORD
+            )
+            users = client.users.list()
+            for user in users:
+                if user.username == username:
+                    return user.id
+    return None
 
 def create_cvat_user(username: str, email: str, password: str, first_name: str, last_name: str):
     data = request.get_json()
@@ -36,6 +54,8 @@ def create_cvat_user(username: str, email: str, password: str, first_name: str, 
             )
 
             (created_user, response) = api_client.auth_api.create_register(register_request)
+            print(created_user)
+            print(response)
             return jsonify({"message": "User registered successfully", "data": created_user.to_dict()}), 201
 
     except exceptions.ApiException as e:
