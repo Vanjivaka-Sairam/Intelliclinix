@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from pydantic import ValidationError
 from datetime import datetime
 from db import get_db
-from models.schemas import UserSignup, UserLogin
+from schema.schemas import UserSignup, UserLogin
 from utils.security import hash_password, verify_password, create_jwt_token, jwt_required
 from services.cvat_api import create_cvat_user, cvat_login, cvat_logout
 auth_bp = Blueprint("auth", __name__)

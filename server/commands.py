@@ -91,5 +91,3 @@ def init_db_command():
 
 def register_commands(app):
     app.cli.add_command(init_db_command)
-
-

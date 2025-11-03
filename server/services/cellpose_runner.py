@@ -60,7 +60,7 @@ def run_cellpose_model(image_bytes, diameter, channels):
     Returns (class_rgb_array, instance_rgb_array)
     """
     
-    model_path = os.path.join(current_app.root_path, 'models', 'trained_cellpose_model.pt')
+    model_path = os.path.join(current_app.root_path, 'models', 'trained_cellpose')
     
     if not os.path.exists(model_path):
         print(f"FATAL: Model file not found at {model_path}")
@@ -70,7 +70,7 @@ def run_cellpose_model(image_bytes, diameter, channels):
 
     model = models.CellposeModel(pretrained_model=model_path, gpu=False)
     
-    img = cp_io.imread(io.BytesIO(image_bytes))
+    img = np.array(Image.open(io.BytesIO(image_bytes)))
     
     diam = None if (diameter is None or diameter <= 0) else float(diameter)
     
