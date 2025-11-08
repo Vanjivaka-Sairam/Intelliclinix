@@ -8,6 +8,7 @@ __pycache__/
 *$py.class
 **.pyc
 server/__pycache__/
+server/models
 
 # C extensions
 *.so
