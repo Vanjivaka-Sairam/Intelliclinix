@@ -5,6 +5,7 @@ from db import get_db
 from schema.schemas import UserSignup, UserLogin
 from utils.security import hash_password, verify_password, create_jwt_token, jwt_required
 from services.cvat_api import create_cvat_user, cvat_login, cvat_logout
+from bson.objectid import ObjectId
 auth_bp = Blueprint("auth", __name__)
 
 
@@ -92,7 +93,11 @@ def login():
 @jwt_required
 def logout(current_user_id):
     db = get_db()
-    user = db.users.find_one({"_id": current_user_id})
+    try:
+        user_id = ObjectId(current_user_id)
+    except Exception:
+        return jsonify({"error": "Invalid user ID"}), 400
+    user = db.users.find_one({"_id": user_id})
     if not user:
         return jsonify({"error": "User not found"}), 404
     app_logout_success = True

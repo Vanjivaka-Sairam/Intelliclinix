@@ -83,7 +83,12 @@ def get_inference_status(current_user_id, inference_id):
 
 @inferences_bp.route('/<inference_id>/download', methods=['GET'])
 @jwt_required
-def download_inference_zip(current_user_id, inference_id): #downloads all mask results for an inference as a ZIP file.
+def download_inference_zip(current_user_id, inference_id):
+    """
+    Downloads all mask results for an inference as a ZIP file.
+    The ZIP contains a folder for each dataset file, containing
+    the image and its masks.
+    """
     db = get_db()
     fs = get_fs()
     
@@ -102,28 +107,40 @@ def download_inference_zip(current_user_id, inference_id): #downloads all mask r
     if inference['status'] != 'completed':
         return jsonify({"error": "Inference is not yet complete"}), 400
     
-    # Create an in-memory ZIP file
     memory_file = io.BytesIO()
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
         
         for result in inference.get('results', []):
             source_filename = result['source_filename']
-            base_name = os.path.splitext(source_filename)[0] 
+            # Create a folder name based on the file stem (e.g., 'image_01')
+            folder_name = os.path.splitext(source_filename)[0]
 
-            # Add Class Mask
-            if 'class_mask_id' in result:
+            # 1. Add Original Image
+            # Path inside zip: image_01/image_01.png
+            if 'source_image_gridfs_id' in result:
+                try:
+                    file_data = fs.get(ObjectId(result['source_image_gridfs_id'])).read()
+                    zip_path = os.path.join(folder_name, source_filename)
+                    zf.writestr(zip_path, file_data)
+                except Exception as e:
+                    current_app.logger.error(f"Failed to read source_image {result['source_image_gridfs_id']}: {e}")
+
+            # 2. Add Class Mask
+            # Path inside zip: image_01/image_01_class_mask.png
+            if 'class_mask_id' in result and result['class_mask_id']:
                 try:
                     file_data = fs.get(ObjectId(result['class_mask_id'])).read()
-                    zip_path = f"{base_name}_class_mask.png"
+                    zip_path = os.path.join(folder_name, f"{folder_name}_class_mask.png")
                     zf.writestr(zip_path, file_data)
                 except Exception as e:
                     current_app.logger.error(f"Failed to read class_mask {result['class_mask_id']}: {e}")
 
-            # Add Instance Mask
-            if 'instance_mask_id' in result:
+            # 3. Add Instance Mask
+            # Path inside zip: image_01/image_01_instance_mask.png
+            if 'instance_mask_id' in result and result['instance_mask_id']:
                 try:
                     file_data = fs.get(ObjectId(result['instance_mask_id'])).read()
-                    zip_path = f"{base_name}_instance_mask.png"
+                    zip_path = os.path.join(folder_name, f"{folder_name}_instance_mask.png")
                     zf.writestr(zip_path, file_data)
                 except Exception as e:
                     current_app.logger.error(f"Failed to read instance_mask {result['instance_mask_id']}: {e}")
@@ -135,3 +152,36 @@ def download_inference_zip(current_user_id, inference_id): #downloads all mask r
         mimetype='application/zip',
         headers={'Content-Disposition': f'attachment;filename=inference_{inference_id}.zip'}
     )
+
+
+@inferences_bp.route('/', methods=['GET'])
+@jwt_required
+def list_inferences(current_user_id):
+    db = get_db()
+    try:
+        requester_id = ObjectId(current_user_id)
+    except Exception:
+        return jsonify({"error": "Invalid user id"}), 400
+
+    query = {"requested_by": requester_id}
+    requested_dataset = request.args.get("dataset_id")
+    if requested_dataset:
+        try:
+            query["dataset_id"] = ObjectId(requested_dataset)
+        except Exception:
+            return jsonify({"error": "Invalid dataset_id"}), 400
+    if status := request.args.get("status"):
+        query["status"] = status
+
+    records = list(db.inferences.find(query).sort("created_at", -1))
+    for record in records:
+        record["_id"] = str(record["_id"])
+        record["dataset_id"] = str(record["dataset_id"])
+        record["requested_by"] = str(record["requested_by"])
+        for result in record.get("results", []):
+            if "class_mask_id" in result:
+                result["class_mask_id"] = str(result["class_mask_id"])
+            if "instance_mask_id" in result:
+                result["instance_mask_id"] = str(result["instance_mask_id"])
+
+    return jsonify(records), 200

@@ -151,6 +151,7 @@ def run_inference_job(inference_id_str: str, params: dict):
             # 4. Store both IDs in the results
             results.append({
                 "source_filename": file_ref['filename'],
+                "source_image_gridfs_id": str(file_ref['gridfs_id']),
                 "class_mask_id": str(class_mask_gridfs_id),
                 "instance_mask_id": str(instance_mask_gridfs_id)
             })
