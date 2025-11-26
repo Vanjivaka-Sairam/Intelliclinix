@@ -3,8 +3,9 @@ from db import get_db
 import datetime
 from bson.objectid import ObjectId
 from utils.security import jwt_required
-from services.cellpose_runner import run_inference_job
 from db import get_db, get_fs
+from blueprints.models import get_model_by_id
+from services.inference_manager import start_managed_inference
 import io
 import zipfile
 import os
@@ -14,13 +15,27 @@ inferences_bp = Blueprint('inferences', __name__)
 @inferences_bp.route('/start', methods=['POST'])
 @jwt_required
 def start_inference(current_user_id):
-    """Starts a new inference job using the hardcoded Cellpose runner."""
+    """
+    Starts a new inference job.
+
+    The endpoint path and general contract remain the same, but the specific
+    model implementation is chosen dynamically via the model registry so that
+    new models can be added without changing this endpoint.
+    """
     db = get_db()
     data = request.json
     
     dataset_id = data.get('dataset_id')
-    # Get Cellpose params from request, with defaults
-    params = data.get('params', {})
+    # Model selection (defaults to Cellpose if not specified)
+    model_id = data.get('model_id', 'cellpose_default')
+    model_def = get_model_by_id(model_id)
+    if not model_def:
+        return jsonify({"error": f"Unknown model_id '{model_id}'"}), 400
+
+    runner_name = model_def["runner_name"]
+
+    # Get model params from request, with Cellpose-friendly defaults for now
+    params = data.get('params', {}) or {}
     params.setdefault('diameter', None)
     params.setdefault('channels', [0, 0])
 
@@ -30,7 +45,9 @@ def start_inference(current_user_id):
     inference_doc = {
         "dataset_id": ObjectId(dataset_id),
         "requested_by": ObjectId(current_user_id),
-        "params": params, 
+        "params": params,
+        "model_id": model_id,
+        "runner_name": runner_name,
         "status": "queued",
         "created_at": datetime.datetime.utcnow(),
         "results": []
@@ -38,12 +55,18 @@ def start_inference(current_user_id):
     inference_id = db.inferences.insert_one(inference_doc).inserted_id
 
     try:
-        run_inference_job(str(inference_id), params)
-        
+        # Dispatch to the appropriate model runner (strategy) based on runner_name.
+        # The dispatcher will look up the runner from the registry and execute it.
+        start_managed_inference(str(inference_id), params)
+
     except Exception as e:
         db.inferences.update_one(
             {"_id": inference_id},
-            {"$set": {"status": "failed", "finished_at": datetime.datetime.utcnow(), "notes": str(e)}}
+            {"$set": {
+                "status": "failed",
+                "finished_at": datetime.datetime.utcnow(),
+                "notes": str(e),
+            }}
         )
         print(f"Inference {inference_id} failed:")
         import traceback

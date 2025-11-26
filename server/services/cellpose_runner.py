@@ -1,4 +1,3 @@
-from db import get_db, get_fs
 from bson.objectid import ObjectId
 import datetime
 from PIL import Image
@@ -6,9 +5,11 @@ import numpy as np
 import io
 import os
 from flask import current_app
-from services.storage import save_bytes_to_gridfs
 from cellpose import models
 from cellpose import io as cp_io
+
+from services.model_runner_base import ModelRunner
+from services.storage import save_bytes_to_gridfs
 
 BG_RGB       = (0, 0, 0)
 NUCLEUS_RGB = (138, 17, 157) # class color
@@ -97,73 +98,80 @@ def run_cellpose_model(image_bytes, diameter, channels):
     return class_rgb, instance_rgb
 
 
-def run_inference_job(inference_id_str: str, params: dict):
-    """The job logic for a Cellpose inference run."""
-    db = get_db()
-    fs = get_fs()
-    inference_id = ObjectId(inference_id_str)
-    
-    db.inferences.update_one(
-        {"_id": inference_id},
-        {"$set": {"status": "running"}}
-    )
+class CellposeRunner(ModelRunner):
+    """Concrete strategy for running Cellpose-based inference."""
 
-    inference_doc = db.inferences.find_one({"_id": inference_id})
-    dataset_doc = db.datasets.find_one({"_id": inference_doc['dataset_id']})
+    def run_inference_job(self, inference_id_str: str, params: dict) -> None:
+        """
+        Execute a Cellpose inference job.
 
-    diameter = params.get('diameter')
-    channels = params.get('channels', [0, 0])
+        This mirrors the previous procedural implementation but is now
+        encapsulated as a strategy class.
+        """
+        inference_id = ObjectId(inference_id_str)
 
-    results = []
-    for file_ref in dataset_doc['files']:
-        if file_ref['type'] == 'image':
-            image_file = fs.get(file_ref['gridfs_id'])
-            
+        # Mark job as running
+        self.db.inferences.update_one(
+            {"_id": inference_id},
+            {"$set": {"status": "running"}},
+        )
+
+        inference_doc = self.db.inferences.find_one({"_id": inference_id})
+        dataset_doc = self.db.datasets.find_one({"_id": inference_doc["dataset_id"]})
+
+        diameter = params.get("diameter")
+        channels = params.get("channels", [0, 0])
+
+        results = []
+        for file_ref in dataset_doc["files"]:
+            if file_ref["type"] != "image":
+                continue
+
+            image_file = self.fs.get(file_ref["gridfs_id"])
+
             class_rgb_array, instance_rgb_array = run_cellpose_model(
-                image_file.read(), 
-                diameter=diameter, 
-                channels=channels
+                image_file.read(),
+                diameter=diameter,
+                channels=channels,
             )
-            
+
             # 2. Convert both to PNG bytes
             class_mask_bytes = convert_to_png_bytes(class_rgb_array)
             instance_mask_bytes = convert_to_png_bytes(instance_rgb_array)
 
             # 3. Save both to GridFS
-            base_filename = file_ref['filename'].rsplit('.', 1)[0]
+            base_filename = file_ref["filename"].rsplit(".", 1)[0]
             common_metadata = {
-                'source_image_gridfs_id': str(file_ref['gridfs_id']),
-                'inference_id': str(inference_id)
+                "source_image_gridfs_id": str(file_ref["gridfs_id"]),
+                "inference_id": str(inference_id),
             }
 
             class_mask_gridfs_id = save_bytes_to_gridfs(
                 class_mask_bytes,
                 filename=f"class_{base_filename}.png",
-                metadata={**common_metadata, 'type': 'mask_class'}
+                metadata={**common_metadata, "type": "mask_class"},
             )
-            
+
             instance_mask_gridfs_id = save_bytes_to_gridfs(
                 instance_mask_bytes,
                 filename=f"instance_{base_filename}.png",
-                metadata={**common_metadata, 'type': 'mask_instance'}
+                metadata={**common_metadata, "type": "mask_instance"},
             )
 
             # 4. Store both IDs in the results
-            results.append({
-                "source_filename": file_ref['filename'],
-                "source_image_gridfs_id": str(file_ref['gridfs_id']),
-                "class_mask_id": str(class_mask_gridfs_id),
-                "instance_mask_id": str(instance_mask_gridfs_id)
-            })
+            results.append(
+                {
+                    "source_filename": file_ref["filename"],
+                    "source_image_gridfs_id": str(file_ref["gridfs_id"]),
+                    "class_mask_id": str(class_mask_gridfs_id),
+                    "instance_mask_id": str(instance_mask_gridfs_id),
+                }
+            )
 
-    db.inferences.update_one(
-        {"_id": inference_id},
-        {
-            "$set": {
-                "status": "completed",
-                "finished_at": datetime.datetime.utcnow(),
-                "results": results
-            }
-        }
-    )
-    print(f"Cellpose inference job {inference_id_str} finished processing.")
+        # Mark job as completed with results
+        self.update_inference_status(
+            inference_id=inference_id,
+            status="completed",
+            results=results,
+        )
+        print(f"Cellpose inference job {inference_id_str} finished processing.")

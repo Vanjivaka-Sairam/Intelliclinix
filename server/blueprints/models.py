@@ -3,6 +3,8 @@ from utils.security import jwt_required
 
 models_bp = Blueprint("models", __name__)
 
+# NOTE: Each model definition includes a logical `runner_name` that will be
+# resolved to an actual implementation by the services.registry module.
 AVAILABLE_MODELS = [
     {
         "_id": "cellpose_default",
@@ -19,9 +21,19 @@ AVAILABLE_MODELS = [
 ]
 
 
+_MODELS_BY_ID = {m["_id"]: m for m in AVAILABLE_MODELS}
+
+
+def get_model_by_id(model_id: str):
+    """
+    Look up a model definition by its public identifier.
+
+    Returns the model dict or None if unknown.
+    """
+    return _MODELS_BY_ID.get(model_id)
+
+
 @models_bp.route("/", methods=["GET"])
 @jwt_required
 def list_models(current_user_id):
     return jsonify(AVAILABLE_MODELS), 200
-
-
