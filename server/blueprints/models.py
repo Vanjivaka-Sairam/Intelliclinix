@@ -8,16 +8,10 @@ models_bp = Blueprint("models", __name__)
 AVAILABLE_MODELS = [
     {
         "_id": "cellpose_default",
-        "name": "Cellpose Nuclei",
+        "name": "Cellpose",
         "runner_name": "cellpose",
-        "description": "General-purpose cell/nuclei segmentation model",
-    },
-    {
-        "_id": "cellpose_cytoplasm",
-        "name": "Cellpose Cytoplasm",
-        "runner_name": "cellpose",
-        "description": "Cellpose model tuned for cytoplasm segmentation",
-    },
+        "description": "Cellpose-based segmentation model",
+    }
 ]
 
 
@@ -25,11 +19,6 @@ _MODELS_BY_ID = {m["_id"]: m for m in AVAILABLE_MODELS}
 
 
 def get_model_by_id(model_id: str):
-    """
-    Look up a model definition by its public identifier.
-
-    Returns the model dict or None if unknown.
-    """
     return _MODELS_BY_ID.get(model_id)
 
 

@@ -1,0 +1,221 @@
+INTELLICLINIX INFERENCE WORKFLOW (STRATEGY / DISPATCH PATTERN)
+==============================================================
+
+High‑level idea
+---------------
+- There is ONE HTTP endpoint to start inference: POST /api/inferences/start
+- The endpoint does NOT know any model details (Cellpose, UNet, etc.).
+- It only:
+  - validates input
+  - records an inference document in MongoDB
+  - calls an internal dispatcher
+- The dispatcher reads which runner to use from the inference document and
+  calls the correct runner class (strategy) to do the real work.
+
+
+Main components
+---------------
+1) Blueprint endpoint (API layer)
+   - File: server/blueprints/inferences.py
+   - Function: start_inference(...)
+
+2) Dispatcher / Context (internal)
+   - File: server/services/inference_manager.py
+   - Function: start_managed_inference(...)
+
+3) Strategy base class (runner interface)
+   - File: server/services/model_runner_base.py
+   - Class: ModelRunner
+
+4) Concrete strategy for Cellpose
+   - File: server/services/cellpose_runner.py
+   - Class: CellposeRunner(ModelRunner)
+
+5) Model metadata
+   - File: server/blueprints/models.py
+   - AVAILABLE_MODELS list and get_model_by_id(model_id)
+
+
+STEP-BY-STEP FLOW
+-----------------
+
+1. Frontend calls the API
+   -----------------------
+   - Endpoint: POST /api/inferences/start
+   - Handler: start_inference in server/blueprints/inferences.py
+   - Example request body:
+     {
+       "dataset_id": "<dataset Mongo _id as string>",
+       "model_id": "cellpose_default",   // or any other model id
+       "params": { ... }                 // optional, model-specific params
+     }
+
+
+2. Endpoint validates and selects model
+   ------------------------------------
+   In start_inference:
+   - Reads JSON: dataset_id, model_id, params.
+   - Uses get_model_by_id(model_id) from blueprints/models.py to fetch
+     the model definition from AVAILABLE_MODELS.
+   - From the model definition, reads:
+       runner_name = model_def["runner_name"]
+     e.g. "cellpose".
+   - IMPORTANT: The endpoint does *not* care what runner_name means internally;
+     it just stores it.
+
+
+3. Endpoint creates an inference document
+   --------------------------------------
+   In start_inference:
+   - Builds a MongoDB document:
+       {
+         "dataset_id": ObjectId(dataset_id),
+         "requested_by": ObjectId(current_user_id),
+         "params": params,          // treated as opaque blob
+         "model_id": model_id,      // e.g. "cellpose_default"
+         "runner_name": runner_name,// e.g. "cellpose"
+         "status": "queued",
+         "created_at": <utc_now>,
+         "results": []
+       }
+   - Inserts it into db.inferences and gets inference_id.
+
+
+4. Endpoint hands off to dispatcher
+   --------------------------------
+   Still in start_inference:
+   - Calls:
+       start_managed_inference(str(inference_id), params)
+     from server/services/inference_manager.py.
+   - If this call raises an exception, the endpoint marks the inference
+     as failed and returns HTTP 500 to the client.
+   - If it succeeds, the endpoint returns:
+       {
+         "message": "Inference job completed",
+         "inference_id": "<id as string>"
+       }
+
+
+5. Dispatcher reads inference and selects runner
+   ---------------------------------------------
+   In start_managed_inference (services/inference_manager.py):
+   - Loads the inference document from MongoDB by _id.
+   - Reads:
+       runner_name = inference_doc["runner_name"]
+   - Looks up the corresponding runner class from RUNNER_REGISTRY:
+       RUNNER_REGISTRY: Dict[str, Type[ModelRunner]] = {
+         "cellpose": CellposeRunner,
+         // future: "unet": UnetRunner, etc.
+       }
+   - If runner_name is unknown, it raises NotImplementedError.
+   - Otherwise:
+       runner_class = RUNNER_REGISTRY[runner_name]
+       runner = runner_class()
+
+
+6. Dispatcher invokes the strategy
+   --------------------------------
+   In start_managed_inference:
+   - Calls:
+       runner.run_inference_job(inference_id_str, params)
+   - Note:
+     - inference_id_str identifies which job to work on.
+     - params is the same opaque dict that came from the API.
+   - The dispatcher does NOT know how inference is actually done;
+     it just delegates to the selected ModelRunner.
+
+
+7. CellposeRunner performs the actual work
+   ---------------------------------------
+   In CellposeRunner.run_inference_job (services/cellpose_runner.py):
+   - Converts inference_id_str to ObjectId.
+   - Marks the inference as "running" in MongoDB.
+   - Loads:
+       inference_doc = db.inferences.find_one({"_id": inference_id})
+       dataset_doc   = db.datasets.find_one({"_id": inference_doc["dataset_id"]})
+   - Interprets params in a Cellpose-specific way:
+       diameter = params.get("diameter")
+       channels = params.get("channels", [0, 0])
+   - Iterates over each file in dataset_doc["files"]:
+       - Reads the image bytes from GridFS.
+       - Calls run_cellpose_model(image_bytes, diameter, channels).
+       - Converts the masks to PNG bytes.
+       - Saves them to GridFS with metadata (inference_id, source image id).
+       - Accumulates a results list with mask IDs and filenames.
+   - When finished:
+       self.update_inference_status(
+         inference_id=inference_id,
+         status="completed",
+         results=results,
+       )
+   - If something goes wrong, start_managed_inference will catch it and mark
+     the job as "failed".
+
+
+8. Client checks status and downloads results
+   ------------------------------------------
+   - GET /api/inferences/<inference_id>
+     - Implemented in blueprints/inferences.py as get_inference_status.
+     - Returns status, params, results (with mask IDs as strings, etc.).
+
+   - GET /api/inferences/<inference_id>/download
+     - Also in blueprints/inferences.py.
+     - Reads the inference, then streams a ZIP containing original images
+       and masks from GridFS.
+
+
+HOW TO ADD A NEW MODEL
+----------------------
+
+1) Define a new runner class
+   - Create: server/services/<my_model>_runner.py
+   - Implement a class MyModelRunner(ModelRunner) with:
+       def run_inference_job(self, inference_id_str: str, params: dict) -> None:
+           # Similar pattern to CellposeRunner:
+           #   - load inference + dataset
+           #   - interpret params (your own keys)
+           #   - run model
+           #   - save results and call self.update_inference_status(...)
+
+2) Register the runner
+   - In server/services/inference_manager.py:
+       from services.my_model_runner import MyModelRunner
+
+       RUNNER_REGISTRY = {
+           "cellpose": CellposeRunner,
+           "my_model": MyModelRunner,   # NEW
+       }
+
+3) Expose a model entry
+   - In server/blueprints/models.py, add an AVAILABLE_MODELS entry:
+       {
+         "_id": "my_model_default",
+         "name": "My Model",
+         "runner_name": "my_model",
+         "description": "My custom segmentation model",
+       }
+
+4) Call the same endpoint from the frontend
+   - POST /api/inferences/start
+     {
+       "dataset_id": "...",
+       "model_id": "my_model_default",
+       "params": { ...whatever your model needs... }
+     }
+
+   No changes are needed to:
+   - the inferences blueprint,
+   - the dispatcher,
+   - or existing models.
+
+
+KEY BENEFITS
+------------
+- Endpoints stay stable; you can add/remove models without touching them.
+- Each model's logic lives in its own runner class (clean separation).
+- The dispatcher + registry implement the Strategy pattern:
+  - choose model at runtime based on metadata (model_id → runner_name).
+- Parameters are generic at the API level and interpreted only by the
+  specific runner that understands them.
+
+

@@ -7,6 +7,7 @@ import commands
 from blueprints.inferences import inferences_bp
 from blueprints.datasets import datasets_bp
 from blueprints.files import files_bp
+from blueprints.models import models_bp
 import os
 
 def create_app(config_name = 'default'):
@@ -28,6 +29,7 @@ def create_app(config_name = 'default'):
     api_prefix = "/api"
     app.register_blueprint(auth_bp, url_prefix=f'{api_prefix}/auth')
     app.register_blueprint(datasets_bp, url_prefix=f'{api_prefix}/datasets')
+    app.register_blueprint(models_bp, url_prefix=f'{api_prefix}/models')
     app.register_blueprint(inferences_bp, url_prefix=f'{api_prefix}/inferences')
     app.register_blueprint(files_bp, url_prefix=f'{api_prefix}/files')
     

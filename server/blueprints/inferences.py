@@ -95,12 +95,18 @@ def get_inference_status(current_user_id, inference_id):
     inference['dataset_id'] = str(inference['dataset_id'])
     inference['requested_by'] = str(inference['requested_by'])
     
-    # Serializing the new mask IDs for the frontend
+    # Serializing mask / artifact IDs for the frontend
     for res in inference.get('results', []):
-        if 'class_mask_id' in res:
+        if 'class_mask_id' in res and res['class_mask_id'] is not None:
             res['class_mask_id'] = str(res['class_mask_id'])
-        if 'instance_mask_id' in res:
+        if 'instance_mask_id' in res and res['instance_mask_id'] is not None:
             res['instance_mask_id'] = str(res['instance_mask_id'])
+
+        # New generic artifacts array: ensure any gridfs_id values are strings.
+        artifacts = res.get("artifacts", [])
+        for artifact in artifacts:
+            if "gridfs_id" in artifact:
+                artifact["gridfs_id"] = str(artifact["gridfs_id"])
     
     return jsonify(inference), 200
 
@@ -148,25 +154,48 @@ def download_inference_zip(current_user_id, inference_id):
                 except Exception as e:
                     current_app.logger.error(f"Failed to read source_image {result['source_image_gridfs_id']}: {e}")
 
-            # 2. Add Class Mask
-            # Path inside zip: image_01/image_01_class_mask.png
-            if 'class_mask_id' in result and result['class_mask_id']:
-                try:
-                    file_data = fs.get(ObjectId(result['class_mask_id'])).read()
-                    zip_path = os.path.join(folder_name, f"{folder_name}_class_mask.png")
-                    zf.writestr(zip_path, file_data)
-                except Exception as e:
-                    current_app.logger.error(f"Failed to read class_mask {result['class_mask_id']}: {e}")
+            # 2. Add artifacts (generic, supports multiple models)
+            artifacts = result.get("artifacts", [])
+            if artifacts:
+                # Preferred path: use the generic artifacts list (supports any model).
+                for artifact in artifacts:
+                    gridfs_id = artifact.get("gridfs_id")
+                    if not gridfs_id:
+                        continue
+                    try:
+                        file_data = fs.get(ObjectId(gridfs_id)).read()
+                        # If the artifact provides its own filename, use it; otherwise
+                        # derive a simple name based on kind.
+                        artifact_filename = artifact.get(
+                            "filename",
+                            f"{folder_name}_{artifact.get('kind', 'artifact')}.bin",
+                        )
+                        zip_path = os.path.join(folder_name, artifact_filename)
+                        zf.writestr(zip_path, file_data)
+                    except Exception as e:
+                        current_app.logger.error(
+                            f"Failed to read artifact {gridfs_id} (kind={artifact.get('kind')}): {e}"
+                        )
+            else:
+                # Backwards-compatible path: fall back to class_mask_id / instance_mask_id
+                # if no artifacts list is present (older jobs).
+                # 2a. Add Class Mask
+                if 'class_mask_id' in result and result['class_mask_id']:
+                    try:
+                        file_data = fs.get(ObjectId(result['class_mask_id'])).read()
+                        zip_path = os.path.join(folder_name, f"{folder_name}_class_mask.png")
+                        zf.writestr(zip_path, file_data)
+                    except Exception as e:
+                        current_app.logger.error(f"Failed to read class_mask {result['class_mask_id']}: {e}")
 
-            # 3. Add Instance Mask
-            # Path inside zip: image_01/image_01_instance_mask.png
-            if 'instance_mask_id' in result and result['instance_mask_id']:
-                try:
-                    file_data = fs.get(ObjectId(result['instance_mask_id'])).read()
-                    zip_path = os.path.join(folder_name, f"{folder_name}_instance_mask.png")
-                    zf.writestr(zip_path, file_data)
-                except Exception as e:
-                    current_app.logger.error(f"Failed to read instance_mask {result['instance_mask_id']}: {e}")
+                # 2b. Add Instance Mask
+                if 'instance_mask_id' in result and result['instance_mask_id']:
+                    try:
+                        file_data = fs.get(ObjectId(result['instance_mask_id'])).read()
+                        zip_path = os.path.join(folder_name, f"{folder_name}_instance_mask.png")
+                        zf.writestr(zip_path, file_data)
+                    except Exception as e:
+                        current_app.logger.error(f"Failed to read instance_mask {result['instance_mask_id']}: {e}")
 
     memory_file.seek(0)
     
@@ -202,9 +231,16 @@ def list_inferences(current_user_id):
         record["dataset_id"] = str(record["dataset_id"])
         record["requested_by"] = str(record["requested_by"])
         for result in record.get("results", []):
-            if "class_mask_id" in result:
+            # Backwards-compatible: stringify legacy mask IDs if present
+            if "class_mask_id" in result and result["class_mask_id"] is not None:
                 result["class_mask_id"] = str(result["class_mask_id"])
-            if "instance_mask_id" in result:
+            if "instance_mask_id" in result and result["instance_mask_id"] is not None:
                 result["instance_mask_id"] = str(result["instance_mask_id"])
+
+            # Generic artifacts: ensure any gridfs_id values are strings
+            artifacts = result.get("artifacts", [])
+            for artifact in artifacts:
+                if "gridfs_id" in artifact:
+                    artifact["gridfs_id"] = str(artifact["gridfs_id"])
 
     return jsonify(records), 200

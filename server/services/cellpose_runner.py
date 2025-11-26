@@ -158,13 +158,27 @@ class CellposeRunner(ModelRunner):
                 metadata={**common_metadata, "type": "mask_instance"},
             )
 
-            # 4. Store both IDs in the results
+            # 4. Store result record with a generic artifacts list.
+            #    class_mask_id / instance_mask_id are kept for backwards
+            #    compatibility with existing frontend expectations.
             results.append(
                 {
                     "source_filename": file_ref["filename"],
                     "source_image_gridfs_id": str(file_ref["gridfs_id"]),
                     "class_mask_id": str(class_mask_gridfs_id),
                     "instance_mask_id": str(instance_mask_gridfs_id),
+                    "artifacts": [
+                        {
+                            "kind": "class_mask",
+                            "gridfs_id": str(class_mask_gridfs_id),
+                            "filename": f"{base_filename}_class_mask.png",
+                        },
+                        {
+                            "kind": "instance_mask",
+                            "gridfs_id": str(instance_mask_gridfs_id),
+                            "filename": f"{base_filename}_instance_mask.png",
+                        },
+                    ],
                 }
             )
 
