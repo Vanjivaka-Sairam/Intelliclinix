@@ -8,6 +8,7 @@ from blueprints.inferences import inferences_bp
 from blueprints.datasets import datasets_bp
 from blueprints.files import files_bp
 from blueprints.models import models_bp
+from blueprints.cvat_bp import cvat_bp
 import os
 
 def create_app(config_name = 'default'):
@@ -32,6 +33,7 @@ def create_app(config_name = 'default'):
     app.register_blueprint(models_bp, url_prefix=f'{api_prefix}/models')
     app.register_blueprint(inferences_bp, url_prefix=f'{api_prefix}/inferences')
     app.register_blueprint(files_bp, url_prefix=f'{api_prefix}/files')
+    app.register_blueprint(cvat_bp, url_prefix=f'{api_prefix}/cvat')
     
     @app.route('/health')
     def health_check():

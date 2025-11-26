@@ -6,6 +6,7 @@ from utils.security import jwt_required
 from db import get_db, get_fs
 from blueprints.models import get_model_by_id
 from services.inference_manager import start_managed_inference
+from services.cvat_api import create_task_from_inference
 import io
 import zipfile
 import os
@@ -244,3 +245,63 @@ def list_inferences(current_user_id):
                     artifact["gridfs_id"] = str(artifact["gridfs_id"])
 
     return jsonify(records), 200
+
+
+@inferences_bp.route('/<inference_id>/push_to_cvat', methods=['POST'])
+@jwt_required
+def push_inference_to_cvat(current_user_id, inference_id):
+    """
+    Pushes selected images and masks from an inference result to CVAT.
+    
+    The inference must be completed and owned by the current user.
+    Accepts an optional list of filenames to push only selected images.
+    """
+    db = get_db()
+    
+    # Verify inference exists and belongs to user
+    try:
+        inference_obj_id = ObjectId(inference_id)
+    except Exception:
+        return jsonify({"error": "Invalid inference_id format"}), 400
+    
+    inference = db.inferences.find_one({"_id": inference_obj_id})
+    if not inference:
+        return jsonify({"error": "Inference not found"}), 404
+    
+    if str(inference['requested_by']) != current_user_id:
+        return jsonify({"error": "Forbidden"}), 403
+    
+    if inference['status'] != 'completed':
+        return jsonify({"error": f"Inference is not completed (status: {inference['status']})"}), 400
+    
+    # Get optional task name and selected filenames from request
+    data = request.get_json() or {}
+    task_name = data.get('task_name')
+    selected_filenames = data.get('filenames')  # List of filenames to include
+    
+    # Optional: Get CVAT credentials from request (if user wants to use different account)
+    username = data.get('username')
+    password = data.get('password')
+    
+    try:
+        result = create_task_from_inference(
+            inference_id=inference_id,
+            task_name=task_name,
+            username=username,
+            password=password,
+            selected_filenames=selected_filenames
+        )
+        
+        return jsonify({
+            "message": "Images sent to CVAT successfully",
+            "task_id": result["task_id"],
+            "task_url": result["task_url"]
+        }), 200
+        
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except TimeoutError as e:
+        return jsonify({"error": str(e)}), 504
+    except Exception as e:
+        current_app.logger.error(f"Error pushing inference to CVAT: {e}", exc_info=True)
+        return jsonify({"error": f"Failed to push to CVAT: {str(e)}"}), 500
