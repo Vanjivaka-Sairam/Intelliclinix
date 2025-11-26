@@ -28,3 +28,6 @@ build/
 
 # Logs
 *.log
+
+server/temp.md
+server/inference_workflow.txt
