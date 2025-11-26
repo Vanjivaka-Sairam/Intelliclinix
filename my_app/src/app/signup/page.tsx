@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import { apiFetch, setStoredToken } from "@/lib/api"
 
 export default function SignupPage() {
   const [username, setUsername] = useState("")
@@ -60,27 +61,46 @@ export default function SignupPage() {
     }
 
     try {
-      const response = await fetch("http://localhost:5328/auth/register", {
+      const response = await apiFetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ 
-          username, 
-          password, 
-          email, 
-          full_name: `${firstName} ${lastName}`.trim()
+        body: JSON.stringify({
+          username,
+          password,
+          email,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
         }),
+        auth: false,
       })
 
       const data = await response.json()
 
-      if (response.ok) {
-        localStorage.setItem("username", username)
-        toast("Account created successfully! Your account has been synchronized with CVAT. Redirecting...")
-        router.push("/newupload")
-      } else {
+      if (!response.ok) {
         setErrorMessage(data.error || "Failed to create account.")
+        return
       }
+
+      toast({
+        title: "Account created successfully",
+        description: "Signing you in...",
+      })
+
+      const loginResponse = await apiFetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+        auth: false,
+      })
+      const loginData = await loginResponse.json()
+      if (!loginResponse.ok || !loginData.access_token) {
+        setErrorMessage(loginData.error || "Account created but automatic login failed.")
+        return
+      }
+
+      setStoredToken(loginData.access_token)
+      localStorage.setItem("username", username)
+      router.push("/")
     } catch (error) {
       setErrorMessage("Failed to connect to the server. Please try again.")
     } finally {

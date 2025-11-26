@@ -117,3 +117,32 @@ def logout(current_user_id):
     if cvat_error:
         ret["cvat_error"] = cvat_error
     return jsonify(ret), 200
+
+
+@auth_bp.route("/me", methods=["GET"])
+@auth_bp.route("/user", methods=["GET"])
+@jwt_required
+def current_user(current_user_id):
+    db = get_db()
+    try:
+        user_obj_id = ObjectId(current_user_id)
+    except Exception:
+        return jsonify({"error": "Invalid user ID"}), 400
+
+    user = db.users.find_one(
+        {"_id": user_obj_id},
+        {"password_hash": 0}
+    )
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    user["_id"] = str(user["_id"])
+    created_at = user.get("created_at")
+    if isinstance(created_at, datetime):
+        user["created_at"] = created_at.isoformat()
+
+    last_login = user.get("last_login")
+    if isinstance(last_login, datetime):
+        user["last_login"] = last_login.isoformat()
+
+    return jsonify({"authenticated": True, "user": user}), 200

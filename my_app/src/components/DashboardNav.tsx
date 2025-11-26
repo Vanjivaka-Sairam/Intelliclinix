@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
+import { apiFetch, clearStoredAuth } from "@/lib/api";
 import {
   Upload,
   PieChart,
@@ -13,7 +14,6 @@ import {
   ExternalLink,
   Settings,
   User,
-  Cpu,
 } from "lucide-react";
 
 export default function DashboardNav() {
@@ -22,7 +22,12 @@ export default function DashboardNav() {
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Helper to determine if the current path is active
-  const isActive = (path: string) => pathname === path;
+  const isActive = (path: string) => {
+    if (path === "/") {
+      return pathname === "/";
+    }
+    return pathname.startsWith(path);
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -40,23 +45,20 @@ export default function DashboardNav() {
 
   // Helper to format breadcrumb text
   const getPageTitle = () => {
-    const current = pathname.replace("/", "");
-    if (!current) return "Dashboard";
-    return current.charAt(0).toUpperCase() + current.slice(1);
+    const segments = pathname.split("/").filter(Boolean);
+    if (segments.length === 0) return "Dashboard";
+    return segments
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(" / ");
   };
 
   const handleLogout = async () => {
     try {
-      await fetch("http://localhost:5328/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
+      await apiFetch("/api/auth/logout", { method: "POST" });
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
-      localStorage.removeItem("token");
-      localStorage.removeItem("session");
-      localStorage.removeItem("username");
+      clearStoredAuth();
       window.location.href = "/login";
     }
   };
@@ -78,45 +80,23 @@ export default function DashboardNav() {
 
           {/* Main Navigation */}
           <div className="flex space-x-1">
-            <Link
-              href="/newupload"
-              className={`cvat-nav-item flex items-center px-3 py-3 text-sm font-medium ${
-                isActive("/newupload") ? "active" : ""
-              }`}
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              New Upload
-            </Link>
-
-            <Link
-              href="/models"
-              className={`cvat-nav-item flex items-center px-3 py-3 text-sm font-medium ${
-                isActive("/models") ? "active" : ""
-              }`}
-            >
-              <Cpu className="h-4 w-4 mr-2" />
-              Models
-            </Link>
-
-            <Link
-              href="/predictions"
-              className={`cvat-nav-item flex items-center px-3 py-3 text-sm font-medium ${
-                isActive("/predictions") ? "active" : ""
-              }`}
-            >
-              <PieChart className="h-4 w-4 mr-2" />
-              Predictions
-            </Link>
-
-            <Link
-              href="/corrected"
-              className={`cvat-nav-item flex items-center px-3 py-3 text-sm font-medium ${
-                isActive("/corrected") ? "active" : ""
-              }`}
-            >
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Corrected
-            </Link>
+            {[
+              { href: "/", label: "Dashboard", Icon: PieChart },
+              { href: "/upload", label: "Upload Data", Icon: Upload },
+              { href: "/inference", label: "Run Inference", Icon: Brain },
+              { href: "/results", label: "Results", Icon: CheckCircle },
+            ].map(({ href, label, Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className={`cvat-nav-item flex items-center px-3 py-3 text-sm font-medium ${
+                  isActive(href) ? "active" : ""
+                }`}
+              >
+                <Icon className="h-4 w-4 mr-2" />
+                {label}
+              </Link>
+            ))}
           </div>
 
           {/* User Menu */}

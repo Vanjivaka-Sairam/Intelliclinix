@@ -11,6 +11,7 @@ dnspython==2.8.0
 email-validator==2.3.0
 Flask==3.1.2
 Flask-PyMongo==3.0.1
+Flask-Cors==4.0.1
 idna==3.11
 itsdangerous==2.2.0
 Jinja2==3.1.6
