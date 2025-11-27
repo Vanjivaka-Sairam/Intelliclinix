@@ -1,13 +1,17 @@
 import os
 from pprint import pprint
 from flask import Flask, request, jsonify, current_app
-from cvat_sdk.api_client import Configuration, ApiClient, exceptions, models
-from cvat_sdk.api_client.models import RegisterSerializerExRequest, LoginSerializerExRequest
+from cvat_sdk.api_client import Configuration, ApiClient, exceptions
+from cvat_sdk.api_client.models import (
+    RegisterSerializerExRequest, 
+    LoginSerializerExRequest,
+    DataRequest
+)
 import io
 import time
 import zipfile
+import json
 from http import HTTPStatus
-import requests
 
 CVAT_HOST = os.getenv('CVAT_API_URL')
 CVAT_ADMIN_USERNAME = os.getenv('CVAT_API_USER') 
@@ -227,48 +231,129 @@ def create_task_from_inference(inference_id: str, task_name: str = None, usernam
     with ApiClient(config) as user_client:
         return create_task_from_data(user_client, task_name, image_files, annotation_zip_bytes)
 
-
 def create_cvat_annotation_zip(mask_files: dict) -> bytes:
     """
-    Creates a ZIP file in CVAT Segmentation mask 1.1 format.
-    
-    CVAT Segmentation mask 1.1 format requires:
-    - Masks must be PNG files
-    - Mask filenames must exactly match the image filenames
-    - Each pixel's RGB value represents a class (background is black 0,0,0)
-    
-    Args:
-        mask_files: Dict of {filename: mask_bytes} where mask_bytes are PNG mask images
-    
-    Returns:
-        bytes: ZIP file bytes
+    Create a CVAT Segmentation mask 1.1 ZIP.
+    FIXED: Removes non-standard 'image_patches' folder to allow CVAT importer to find files.
     """
+    import numpy as np
+    from PIL import Image
+
+    def voc_colormap(N=256):
+        cmap = np.zeros((N, 3), dtype=np.uint8)
+        for i in range(N):
+            r = g = b = 0
+            cid = i
+            for j in range(8):
+                r |= ((cid & 1) << (7 - j))
+                g |= (((cid >> 1) & 1) << (7 - j))
+                b |= (((cid >> 2) & 1) << (7 - j))
+                cid >>= 3
+            cmap[i] = [r, g, b]
+        return cmap
+
+    VOC = voc_colormap(256)
+    BG_RGB = (0, 0, 0)
+    NUCLEUS_RGB = (138, 17, 157) # Must match labelmap.txt EXACTLY
+
     if not mask_files:
         raise ValueError("No mask files provided for annotation ZIP")
-    
+
     zip_buffer = io.BytesIO()
-    
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        for filename, mask_bytes in mask_files.items():
-            # CVAT expects masks with the same filename as the images
-            # The mask should be a PNG where pixel colors represent classes
-            # Ensure filename doesn't have path separators
-            clean_filename = filename.split('/')[-1].split('\\')[-1]
-            zip_file.writestr(clean_filename, mask_bytes)
-            current_app.logger.debug(f"Added mask to ZIP: {clean_filename} ({len(mask_bytes)} bytes)")
-    
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        stems = []
+
+        for filename, mask_obj in mask_files.items():
+            # Compute stem (basename without extension)
+            # Example: "data/image_01.jpg" -> "image_01"
+            stem = os.path.splitext(filename.split('/')[-1].split('\\')[-1])[0]
+            stems.append(stem)
+
+            # --- Mask Processing Logic (Same as your original) ---
+            mask_int = None
+            if isinstance(mask_obj, bytes):
+                try:
+                    pil = Image.open(io.BytesIO(mask_obj))
+                    if pil.mode in ("I", "I;16") or pil.mode == 'L':
+                        mask_int = np.array(pil, dtype=np.int32)
+                    else:
+                        rgb = pil.convert('RGB')
+                        arr = np.array(rgb)
+                        diff = np.any(arr != BG_RGB, axis=2)
+                        mask_int = np.zeros(diff.shape, dtype=np.int32)
+                        mask_int[diff] = 1
+                except Exception:
+                    mask_int = np.zeros((1, 1), dtype=np.int32)
+            elif isinstance(mask_obj, (list, tuple)):
+                mask_int = np.array(mask_obj, dtype=np.int32)
+            elif isinstance(mask_obj, np.ndarray):
+                mask_int = mask_obj.astype(np.int32)
+            else:
+                # Fallback logic...
+                mask_int = np.zeros((1, 1), dtype=np.int32)
+
+            if mask_int is None: 
+                mask_int = np.zeros((1, 1), dtype=np.int32)
+            if mask_int.ndim == 3:
+                mask_int = mask_int[:, :, 0] # Simplify if 3D
+            
+            h, w = mask_int.shape
+
+            # --- CLASS MASK (SegmentationClass) ---
+            class_rgb = np.zeros((h, w, 3), dtype=np.uint8)
+            # Ensure strict color matching for the label
+            class_rgb[mask_int > 0] = NUCLEUS_RGB
+
+            class_buf = io.BytesIO()
+            Image.fromarray(class_rgb).convert('RGB').save(class_buf, format='PNG')
+            class_buf.seek(0)
+
+            # CHANGE 1: Write directly to SegmentationClass/{stem}.png
+            # Removed "image_patches/"
+            zf.writestr(f"SegmentationClass/{stem}.png", class_buf.read())
+
+            # --- INSTANCE MASK (SegmentationObject) ---
+            inst_rgb = np.zeros((h, w, 3), dtype=np.uint8)
+            labels = np.unique(mask_int)
+            labels = labels[labels > 0]
+
+            for k in labels:
+                color = VOC[int(k) % 255 + 1]
+                inst_rgb[mask_int == k] = color
+
+            inst_buf = io.BytesIO()
+            Image.fromarray(inst_rgb).convert('RGB').save(inst_buf, format='PNG')
+            inst_buf.seek(0)
+
+            # CHANGE 2: Write directly to SegmentationObject/{stem}.png
+            # Removed "image_patches/"
+            zf.writestr(f"SegmentationObject/{stem}.png", inst_buf.read())
+
+        # --- Write default.txt ---
+        # CHANGE 3: Just list the stems. 
+        # Standard VOC/Segmentation 1.1 does not want directory paths here.
+        default_txt = "".join([f"{s}\n" for s in stems])
+        zf.writestr("ImageSets/Segmentation/default.txt", default_txt)
+
+        # --- Write labelmap.txt ---
+        # This part was correct, but ensures colors match NUCLEUS_RGB above
+        labelmap_text = (
+            "# label:color_rgb:parts:actions\n"
+            "background:0,0,0::\n"
+            "nucleus:138,17,157::\n"
+        )
+        zf.writestr("labelmap.txt", labelmap_text)
+
     zip_buffer.seek(0)
-    zip_bytes = zip_buffer.getvalue()
-    current_app.logger.info(f"Created annotation ZIP with {len(mask_files)} files, total size: {len(zip_bytes)} bytes")
-    return zip_bytes
+    return zip_buffer.getvalue()
 
 
 def create_task_from_data(user_client: ApiClient, task_name: str, image_files: dict, annotation_zip_bytes: bytes):
     """
-    Pushes images and masks to CVAT using the 3-step flow as per CVAT SDK documentation.
+    Pushes images and masks to CVAT using the 3-step flow described in the Tasks API PDF.
     
     Args:
-        user_client: Authenticated CVAT client (ApiClient instance)
+        user_client: Authenticated CVAT client
         task_name: Title for the new task
         image_files: Dict of {filename: file_bytes} for the RAW images
         annotation_zip_bytes: Bytes of the ZIP file containing the masks (Segmentation 1.1 format)
@@ -276,13 +361,17 @@ def create_task_from_data(user_client: ApiClient, task_name: str, image_files: d
     Returns:
         dict: Contains task_id and task_url
     """
+    # Use api_client.tasks_api as shown in temp.md examples
+    tasks_api = user_client.tasks_api
+
     # ------------------------------------------------------------------
-    # STEP 1: CREATE TASK
+    # STEP 1: CREATE TASK (See PDF Page 2)
     # Endpoint: POST /api/tasks
     # ------------------------------------------------------------------
     current_app.logger.info(f"[CVAT] Step 1: Creating Task '{task_name}'...")
     
     # Define the label structure (must match your Cellpose classes)
+    # Use dict format as shown in temp.md examples - models can be passed as dicts
     task_spec = {
         'name': task_name,
         'labels': [{
@@ -292,16 +381,17 @@ def create_task_from_data(user_client: ApiClient, task_name: str, image_files: d
     }
     
     try:
-        # Use api_client.tasks_api as per documentation
-        (task, response) = user_client.tasks_api.create(task_spec)
-        task_id = task.id
+        # The create method returns a tuple: (data, response)
+        # Can accept dict or model objects
+        task_data, _ = tasks_api.create(task_spec)
+        task_id = task_data.id
         current_app.logger.info(f"[CVAT] Task created with ID: {task_id}")
     except exceptions.ApiException as e:
         current_app.logger.error(f"Exception when creating task: {e}")
         raise ValueError(f"Failed to create CVAT task: {e}")
 
     # ------------------------------------------------------------------
-    # STEP 2: UPLOAD DATA (IMAGES)
+    # STEP 2: UPLOAD DATA (IMAGES) (See PDF Page 14)
     # Endpoint: POST /api/tasks/{id}/data/
     # ------------------------------------------------------------------
     current_app.logger.info(f"[CVAT] Step 2: Uploading {len(image_files)} raw images...")
@@ -313,200 +403,255 @@ def create_task_from_data(user_client: ApiClient, task_name: str, image_files: d
         f.name = filename  # Critical: CVAT needs the filename to match annotations later
         client_files.append(f)
 
-    # Create data request model
-    task_data = models.DataRequest(
+    data_request = DataRequest(
         image_quality=70,
-        client_files=client_files,
+        use_zip_chunks=True,
+        use_cache=True,
+        client_files=client_files
     )
-
-    # Upload data with multipart/form-data content type (required for binary files)
+    
     try:
-        (result, response) = user_client.tasks_api.create_data(
-            task_id,
-            data_request=task_data,
+        # This initiates the upload - returns (data, response) tuple
+        # According to temp.md, create_data can return 202 for async operations
+        (data, response) = tasks_api.create_data(
+            id=task_id, 
+            data_request=data_request,
             _content_type="multipart/form-data",
             _check_status=False,
             _parse_response=False
         )
         
-        if response.status != HTTPStatus.ACCEPTED:
-            raise ValueError(f"Failed to start data upload: {response.status} - {response.msg}")
-        
-        # Get the request ID from the response
-        import json
-        response_data = json.loads(response.data)
-        rq_id = response_data.get("rq_id")
-        
-        if not rq_id:
-            raise ValueError("No rq_id in response from CVAT data upload")
-        
-        current_app.logger.info(f"[CVAT] Data upload started, request ID: {rq_id}")
-        
+        # Check if async (202) or immediate (201)
+        if response.status == HTTPStatus.ACCEPTED:  # 202
+            # Async upload - need to poll
+            response_data = json.loads(response.data)
+            rq_id = response_data.get("rq_id")
+            
+            if rq_id:
+                current_app.logger.info(f"[CVAT] Data upload started, request ID: {rq_id}")
+                # Wait for upload to complete
+                status = None
+                message = None
+                max_attempts = 300
+                
+                for attempt in range(max_attempts):
+                    try:
+                        (request_details, api_response) = user_client.requests_api.retrieve(rq_id)
+                        status = request_details.status.value
+                        message = request_details.message
+                        
+                        if status in {'finished', 'failed'}:
+                            break
+                        time.sleep(1)
+                    except exceptions.ApiException as e:
+                        current_app.logger.warning(f"Error checking upload status (attempt {attempt + 1}/{max_attempts}): {e}")
+                        time.sleep(1)
+                
+                if status != 'finished':
+                    error_msg = f"Data upload failed with status: {status}"
+                    if message:
+                        error_msg += f". Details: {message}"
+                    raise TimeoutError(error_msg)
+            else:
+                current_app.logger.warning("[CVAT] No rq_id in response, polling task size instead...")
+                # Fallback to polling task size
+                for attempt in range(30):
+                    time.sleep(2)
+                    try:
+                        task_info, _ = tasks_api.retrieve(id=task_id)
+                        if task_info.size > 0:
+                            current_app.logger.info("[CVAT] Images processed successfully.")
+                            break
+                    except exceptions.ApiException as e:
+                        current_app.logger.warning(f"Error checking task status (attempt {attempt + 1}/30): {e}")
+                        time.sleep(2)
+                else:
+                    raise TimeoutError("CVAT timed out processing the images.")
+        elif response.status == HTTPStatus.CREATED:  # 201
+            current_app.logger.info("[CVAT] Images uploaded and processed immediately.")
+        else:
+            raise ValueError(f"Unexpected response status: {response.status} - {response.msg}")
+            
     except exceptions.ApiException as e:
         current_app.logger.error(f"Exception when uploading data: {e}")
         raise ValueError(f"Failed to upload images to CVAT: {e}")
     
-    # WAIT for server processing using requests_api
-    current_app.logger.info("[CVAT] Waiting for images to be processed on server...")
-    status = None
-    message = None
-    
-    # Wait up to 5 minutes (300 seconds) for image processing
-    max_attempts = 300  # 300 * 1 second = 5 minutes
-    for attempt in range(max_attempts):
+    # Verify images are processed by checking task size
+    current_app.logger.info("[CVAT] Verifying images are processed...")
+    for attempt in range(10):
+        time.sleep(1)
         try:
-            (request_details, response) = user_client.requests_api.retrieve(rq_id)
-            status = request_details.status.value
-            message = request_details.message
-            
-            if status in {'finished', 'failed'}:
+            task_info, _ = tasks_api.retrieve(id=task_id)
+            if task_info.size > 0:
+                current_app.logger.info(f"[CVAT] Images processed successfully. Task size: {task_info.size}")
                 break
-            time.sleep(1)  # Check every second
         except exceptions.ApiException as e:
-            current_app.logger.warning(f"Error checking request status (attempt {attempt + 1}/{max_attempts}): {e}")
+            current_app.logger.warning(f"Error checking task status (attempt {attempt + 1}/10): {e}")
             time.sleep(1)
-    
-    if status != 'finished':
-        error_msg = f"CVAT data upload failed with status: {status}"
-        if message:
-            error_msg += f". Details: {message}"
-        raise TimeoutError(error_msg)
-    
-    current_app.logger.info("[CVAT] Images processed successfully.")
-    
-    # Update the task object and verify the task size
-    try:
-        (task, _) = user_client.tasks_api.retrieve(task_id)
-        if task.size == 0:
-            current_app.logger.warning(f"Task {task_id} has size 0, but upload reported finished")
-    except exceptions.ApiException as e:
-        current_app.logger.warning(f"Could not verify task size: {e}")
 
     # ------------------------------------------------------------------
     # STEP 3: UPLOAD ANNOTATIONS (MASKS)
-    # Endpoint: POST /api/tasks/{id}/annotations/import
+    # Endpoint: POST /api/tasks/{id}/dataset/import
     # Use dataset import endpoint which is the standard way to import annotations
     # ------------------------------------------------------------------
     current_app.logger.info("[CVAT] Step 3: Importing generated masks...")
-    
+
     if not annotation_zip_bytes or len(annotation_zip_bytes) == 0:
         current_app.logger.warning("[CVAT] No annotation data to upload, skipping annotation import.")
     else:
-        # Prepare the ZIP file as a file-like object
+        # Debug: list image filenames and inspect zip contents
+        try:
+            current_app.logger.info("[CVAT DEBUG] images to upload: %s", list(image_files.keys()))
+        except Exception:
+            current_app.logger.debug("[CVAT DEBUG] Could not list image_files keys")
+
+        # Validate the ZIP and log its content before uploading
+        try:
+            import zipfile as _zip
+            z = _zip.ZipFile(io.BytesIO(annotation_zip_bytes))
+            if "ImageSets/Segmentation/default.txt" in z.namelist():
+                default_txt = z.read("ImageSets/Segmentation/default.txt").decode('utf-8')
+                current_app.logger.info("[CVAT DEBUG] default.txt:\n%s", default_txt)
+            else:
+                current_app.logger.warning("[CVAT DEBUG] default.txt not found in ZIP")
+
+            current_app.logger.info("[CVAT DEBUG] zip contents: %s", z.namelist())
+
+            # Inspect a sample class mask colors
+            cls_files = [n for n in z.namelist() if n.startswith("SegmentationClass/")]
+            if cls_files:
+                try:
+                    from PIL import Image as _Image
+                    data = z.read(cls_files[0])
+                    img = _Image.open(io.BytesIO(data)).convert('RGB')
+                    colors = set(tuple(c) for c in list(img.getdata()))
+                    current_app.logger.info("[CVAT DEBUG] sample class mask colors (first file): %s", list(colors)[:10])
+                except Exception as e:
+                    current_app.logger.debug("[CVAT DEBUG] failed to inspect class mask colors: %s", e)
+        except Exception as e:
+            current_app.logger.warning(f"[CVAT DEBUG] Failed to inspect annotation ZIP before upload: {e}")
+
+        # Prepare the ZIP file object for upload
         zip_file_obj = io.BytesIO(annotation_zip_bytes)
         zip_file_obj.name = "masks.zip"
 
-        # Use REST API directly to import annotations
-        # The TasksApi doesn't have create_dataset_import, so we use requests library
+        current_app.logger.info("[CVAT] Importing annotations via dataset import endpoint...")
+
         try:
-            current_app.logger.info("[CVAT] Starting annotation import via REST API...")
-            
-            # Get the base URL and authentication headers from ApiClient
-            base_url = user_client.configuration.host.rstrip('/')
-            url = f"{base_url}/api/tasks/{task_id}/dataset/import"
-            
-            # Get authentication headers
-            headers = user_client.get_common_headers()
-            query_params = []
-            user_client.update_params_for_auth(headers=headers, queries=query_params, method="POST")
-            
-            # Prepare multipart/form-data
+            response = None
+            used_create_annotations = False
+
+            # Ensure zip is at the beginning before first attempt
             zip_file_obj.seek(0)
-            files = {
-                'annotation_file': ('masks.zip', zip_file_obj, 'application/zip')
-            }
-            data = {
-                'format': 'Segmentation mask 1.1',
-                'save_images': 'false'
-            }
-            
-            # Make the request
-            response = requests.post(
-                url,
-                headers=headers,
-                files=files,
-                data=data,
-                params=query_params,
-                timeout=300
-            )
-            
-            if response.status_code == HTTPStatus.ACCEPTED:
-                # Get the request ID from the response
-                import json
-                response_data = response.json()
-                rq_id = response_data.get("rq_id")
-                
-                if rq_id:
-                    current_app.logger.info(f"[CVAT] Annotation import started, request ID: {rq_id}")
-                    
-                    # Wait for annotation import to complete
-                    status = None
-                    message = None
-                    max_attempts = 300  # Wait up to 5 minutes
-                    
-                    for attempt in range(max_attempts):
-                        try:
-                            (request_details, api_response) = user_client.requests_api.retrieve(rq_id)
-                            status = request_details.status.value
-                            message = request_details.message
-                            
-                            if status in {'finished', 'failed'}:
-                                break
-                            time.sleep(1)
-                        except exceptions.ApiException as e:
-                            current_app.logger.warning(f"Error checking annotation import status (attempt {attempt + 1}/{max_attempts}): {e}")
-                            time.sleep(1)
-                    
-                    if status == 'finished':
-                        current_app.logger.info("[CVAT] Annotations imported successfully.")
-                    else:
-                        error_msg = f"Annotation import failed with status: {status}"
-                        if message:
-                            error_msg += f". Details: {message}"
-                        current_app.logger.error(f"[CVAT] {error_msg}")
-                        raise ValueError(error_msg)
-                else:
-                    current_app.logger.warning("[CVAT] No rq_id in annotation import response, assuming success")
-            elif response.status_code == HTTPStatus.OK:
-                # Some CVAT versions return 200 OK instead of 202 Accepted
-                current_app.logger.info("[CVAT] Annotation import completed immediately (200 OK response).")
-            else:
-                error_msg = f"Failed to start annotation import: {response.status_code} - {response.text}"
-                current_app.logger.error(f"[CVAT] {error_msg}")
-                raise ValueError(error_msg)
-                
-        except Exception as e:
-            current_app.logger.error(f"Error using REST API for annotation import: {e}")
-            # Try alternative: use create_annotations method (might work for some CVAT versions)
+
+            # Try create_dataset_import first, with two common parameter names
             try:
-                current_app.logger.info("[CVAT] Retrying with create_annotations method...")
+                if hasattr(tasks_api, 'create_dataset_import'):
+                    current_app.logger.info("[CVAT] trying create_dataset_import(dataset_file)...")
+                    try:
+                        result, response = tasks_api.create_dataset_import(
+                            id=task_id,
+                            format="Segmentation mask 1.1",
+                            dataset_file=zip_file_obj,
+                            save_images=False,
+                            _content_type="multipart/form-data",
+                            _check_status=False,
+                            _parse_response=False
+                        )
+                    except TypeError:
+                        # fallback to alternate param name
+                        zip_file_obj.seek(0)
+                        result, response = tasks_api.create_dataset_import(
+                            id=task_id,
+                            format="Segmentation mask 1.1",
+                            annotation_file=zip_file_obj,
+                            save_images=False,
+                            _content_type="multipart/form-data",
+                            _check_status=False,
+                            _parse_response=False
+                        )
+                else:
+                    raise AttributeError("create_dataset_import not available")
+
+            except (AttributeError, exceptions.ApiException, TypeError) as e:
+                current_app.logger.info(f"[CVAT] create_dataset_import failed: {e}; trying create_annotations fallback...")
                 zip_file_obj.seek(0)
-                user_client.tasks_api.create_annotations(
-                    id=task_id,
-                    format="Segmentation mask 1.1",
-                    annotation_file_request=models.AnnotationFileRequest(
-                        annotation_file=zip_file_obj
-                    ),
-                    _content_type="multipart/form-data"
-                )
-                current_app.logger.info("[CVAT] Annotations uploaded successfully using create_annotations.")
-            except exceptions.ApiException as e2:
-                current_app.logger.error(f"Annotation upload failed with create_annotations: {e2}")
-                # Last resort: try without content type
                 try:
-                    current_app.logger.info("[CVAT] Retrying without explicit content type...")
-                    zip_file_obj.seek(0)
-                    user_client.tasks_api.create_annotations(
+                    tasks_api.create_annotations(
                         id=task_id,
                         format="Segmentation mask 1.1",
-                        annotation_file_request=models.AnnotationFileRequest(
-                            annotation_file=zip_file_obj
-                        )
+                        annotation_file_request={'annotation_file': zip_file_obj},
+                        _content_type="multipart/form-data"
                     )
-                    current_app.logger.info("[CVAT] Annotations uploaded successfully.")
-                except Exception as e3:
-                    current_app.logger.error(f"All annotation upload methods failed: {e3}")
-                    raise ValueError(f"Failed to upload annotations. Last error: {e3}")
+                    current_app.logger.info("[CVAT] create_annotations succeeded")
+                    used_create_annotations = True
+                    response = None
+                except exceptions.ApiException as e2:
+                    current_app.logger.error(f"[CVAT] create_annotations fallback failed: {e2}")
+                    raise
+
+            # If we received an async response (create_dataset_import), handle it
+            if not used_create_annotations and response:
+                # Log raw response data to help debug missing rq_id issues
+                try:
+                    raw = getattr(response, 'data', None)
+                    current_app.logger.debug("[CVAT] dataset import response raw: %s", raw)
+                except Exception:
+                    pass
+
+                if response.status == HTTPStatus.ACCEPTED:  # 202
+                    # Async import - need to poll
+                    try:
+                        raw = response.data
+                        if isinstance(raw, (bytes, bytearray)):
+                            raw = raw.decode('utf-8')
+                        response_data = json.loads(raw)
+                    except Exception:
+                        response_data = {}
+
+                    rq_id = response_data.get("rq_id")
+
+                    if rq_id:
+                        current_app.logger.info(f"[CVAT] Annotation import started, request ID: {rq_id}")
+
+                        # Wait for annotation import to complete
+                        status = None
+                        message = None
+                        max_attempts = 300  # Wait up to 5 minutes
+
+                        for attempt in range(max_attempts):
+                            try:
+                                (request_details, api_response) = user_client.requests_api.retrieve(rq_id)
+                                status = request_details.status.value
+                                message = request_details.message
+
+                                if status in {'finished', 'failed'}:
+                                    break
+                                time.sleep(1)
+                            except exceptions.ApiException as e:
+                                current_app.logger.warning(f"Error checking annotation import status (attempt {attempt + 1}/{max_attempts}): {e}")
+                                time.sleep(1)
+
+                        if status == 'finished':
+                            current_app.logger.info("[CVAT] Annotations imported successfully.")
+                        else:
+                            error_msg = f"Annotation import failed with status: {status}"
+                            if message:
+                                error_msg += f". Details: {message}"
+                            current_app.logger.error(f"[CVAT] {error_msg}")
+                            raise ValueError(error_msg)
+                    else:
+                        current_app.logger.warning("[CVAT] No rq_id in annotation import response, assuming success")
+                elif response.status == HTTPStatus.OK:  # 200
+                    current_app.logger.info("[CVAT] Annotations imported successfully (immediate response).")
+                else:
+                    error_msg = f"Unexpected response status: {response.status} - {getattr(response, 'msg', '')}"
+                    current_app.logger.error(f"[CVAT] {error_msg}")
+                    raise ValueError(error_msg)
+
+        except Exception as e:
+            current_app.logger.error(f"Error importing annotations: {e}")
+            raise ValueError(f"Failed to upload annotations: {e}")
     
     current_app.logger.info("[CVAT] Workflow complete.")
     
