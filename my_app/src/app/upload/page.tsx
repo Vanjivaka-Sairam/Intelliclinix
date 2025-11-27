@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, UploadCloud } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import { apiFetch } from "@/lib/api";
@@ -13,6 +13,11 @@ export default function UploadPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastDatasetId, setLastDatasetId] = useState<string | null>(null);
+  const [runAfterUpload, setRunAfterUpload] = useState(false);
+  const [modelsList, setModelsList] = useState<any[]>([]);
+  const [modelId, setModelId] = useState<string>("cellpose_default");
+  const [diameter, setDiameter] = useState<string>("");
+  const [channels, setChannels] = useState<string>("0,0");
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files) return;
@@ -43,6 +48,11 @@ export default function UploadPage() {
     try {
       const formData = new FormData();
       formData.append("name", datasetName.trim());
+        if (runAfterUpload) {
+          formData.append("run_inference", "true");
+          formData.append("model_id", modelId);
+          formData.append("params", JSON.stringify({ diameter: diameter ? Number(diameter) : null, channels: channels.split(",").map((c) => Number(c.trim() || 0)) }));
+        }
       selectedFiles.forEach((file) => {
         formData.append("files", file);
       });
@@ -67,6 +77,23 @@ export default function UploadPage() {
       setIsSubmitting(false);
     }
   };
+
+  // Load available models for the run-inference option
+  useEffect(() => {
+    if (isLoading) return; // wait for auth guard to resolve before calling protected endpoints
+    async function loadModels() {
+      try {
+        const resp = await apiFetch('/api/models/');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        setModelsList(data);
+        if (data.length > 0) setModelId(data[0]._id);
+      } catch (e) {
+        console.warn('Failed to load models for upload page');
+      }
+    }
+    loadModels();
+  }, [isLoading]);
 
   if (isLoading) {
     return (
@@ -135,6 +162,21 @@ export default function UploadPage() {
             </div>
 
             <div className="flex gap-3">
+              <label className="flex items-center gap-2 mr-4">
+                <input type="checkbox" checked={runAfterUpload} onChange={(e) => setRunAfterUpload(e.target.checked)} />
+                <span className="text-sm text-cvat-text-secondary">Run inference after upload</span>
+              </label>
+              {runAfterUpload && (
+                <div className="flex items-center gap-3">
+                  <select value={modelId} onChange={(e) => setModelId(e.target.value)} className="rounded border px-2 py-1">
+                    {modelsList.map((m) => (
+                      <option key={m._id} value={m._id}>{m.name}</option>
+                    ))}
+                  </select>
+                  <input value={diameter} onChange={(e) => setDiameter(e.target.value)} placeholder="diameter" className="rounded border px-2 py-1 w-24" />
+                  <input value={channels} onChange={(e) => setChannels(e.target.value)} placeholder="channels e.g. 0,0" className="rounded border px-2 py-1 w-32" />
+                </div>
+              )}
               <button
                 type="submit"
                 className="cvat-button-primary flex-1 py-3 rounded-lg font-medium"

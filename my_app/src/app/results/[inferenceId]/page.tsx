@@ -221,6 +221,7 @@ export default function InferenceDetailPage() {
               <Download className="h-4 w-4" />
               Download ZIP
             </button>
+            {/* classification UI removed — filtering by model is done on the results list page */}
             <button
               onClick={sendToCvat}
               className="flex items-center gap-2 rounded-md bg-cvat-primary px-4 py-2 text-sm text-white disabled:opacity-50"
@@ -233,6 +234,7 @@ export default function InferenceDetailPage() {
               )}
               Send to CVAT
             </button>
+            {/* Archive + Delete removed from detail viewer to avoid destructive actions while inspecting overlays */}
           </div>
         </div>
 

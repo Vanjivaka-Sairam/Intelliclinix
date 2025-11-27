@@ -13,6 +13,122 @@ import os
 
 inferences_bp = Blueprint('inferences', __name__)
 
+
+@inferences_bp.route('/<inference_id>/classify', methods=['POST'])
+@jwt_required
+def classify_inference(current_user_id, inference_id):
+    """Apply classification labels to an inference (either top-level or per-result).
+
+    Accepts JSON body with either:
+      - { "classification": {"label": ..., "confidence": ...} }
+      - { "result_classifications": [{"source_filename": ..., "label": ..., "confidence": ...}, ...] }
+    """
+    db = get_db()
+    data = request.get_json() or {}
+
+    try:
+        inference_obj_id = ObjectId(inference_id)
+    except Exception:
+        return jsonify({"error": "Invalid inference_id format"}), 400
+
+    inference = db.inferences.find_one({"_id": inference_obj_id})
+    if not inference:
+        return jsonify({"error": "Inference not found"}), 404
+
+    if str(inference['requested_by']) != current_user_id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    # Option 1: top-level classification
+    if 'classification' in data:
+        db.inferences.update_one({"_id": inference_obj_id}, {"$set": {"classification": data['classification']}})
+        return jsonify({"message": "Inference classified"}), 200
+
+    # Option 2: per-result classifications
+    if 'result_classifications' in data and isinstance(data['result_classifications'], list):
+        updates = data['result_classifications']
+        # Load current results and update entries
+        inference = db.inferences.find_one({"_id": inference_obj_id})
+        results = inference.get('results', [])
+        # For each provided classification, attempt to match by source_filename
+        for c in updates:
+            filename = c.get('source_filename')
+            label = c.get('label')
+            confidence = c.get('confidence')
+            for r in results:
+                if r.get('source_filename') == filename:
+                    r['classification'] = {"label": label, "confidence": confidence}
+        db.inferences.update_one({"_id": inference_obj_id}, {"$set": {"results": results}})
+        return jsonify({"message": "Result classifications updated"}), 200
+
+    return jsonify({"error": "No classification data provided"}), 400
+
+
+@inferences_bp.route('/<inference_id>', methods=['DELETE'])
+@jwt_required
+def delete_inference(current_user_id, inference_id):
+    """Delete an inference and (optionally) associated GridFS artifacts.
+
+    This performs a hard delete by default and attempts to remove associated
+    GridFS files referenced in the inference results' artifacts.
+    """
+    db = get_db()
+    fs = get_fs()
+
+    try:
+        inference_obj_id = ObjectId(inference_id)
+    except Exception:
+        return jsonify({"error": "Invalid inference_id format"}), 400
+
+    inference = db.inferences.find_one({"_id": inference_obj_id})
+    if not inference:
+        return jsonify({"error": "Inference not found"}), 404
+
+    if str(inference['requested_by']) != current_user_id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    # Attempt to remove any GridFS artifacts referenced in results
+    for res in inference.get('results', []):
+        artifacts = res.get('artifacts', [])
+        for a in artifacts:
+            gf = a.get('gridfs_id')
+            if gf:
+                try:
+                    fs.delete(ObjectId(gf))
+                except Exception:
+                    # log and continue; failure to delete a file should not block removal of the record
+                    current_app.logger.warning(f"Failed to delete gridfs file {gf} while deleting inference {inference_id}")
+
+    # Delete the inference document
+    db.inferences.delete_one({"_id": inference_obj_id})
+
+    return jsonify({"message": "Inference deleted"}), 200
+
+
+@inferences_bp.route('/archive', methods=['POST'])
+@jwt_required
+def bulk_archive_inferences(current_user_id):
+    """Archive or unarchive a set of inference IDs.
+
+    Body: { "ids": ["id1","id2"], "archived": true }
+    """
+    db = get_db()
+    data = request.get_json() or {}
+    ids = data.get('ids')
+    archived = bool(data.get('archived', True))
+
+    if not ids or not isinstance(ids, list):
+        return jsonify({"error": "ids must be a list of inference ids"}), 400
+
+    object_ids = []
+    for i in ids:
+        try:
+            object_ids.append(ObjectId(i))
+        except Exception:
+            return jsonify({"error": f"Invalid inference id: {i}"}), 400
+
+    result = db.inferences.update_many({"_id": {"$in": object_ids}, "requested_by": ObjectId(current_user_id)}, {"$set": {"archived": archived}})
+    return jsonify({"matched": result.matched_count, "modified": result.modified_count}), 200
+
 @inferences_bp.route('/start', methods=['POST'])
 @jwt_required
 def start_inference(current_user_id):
@@ -216,7 +332,8 @@ def list_inferences(current_user_id):
     except Exception:
         return jsonify({"error": "Invalid user id"}), 400
 
-    query = {"requested_by": requester_id}
+    # By default, do not return archived inferences unless explicitly requested
+    query = {"requested_by": requester_id, "archived": {"$ne": True}}
     requested_dataset = request.args.get("dataset_id")
     if requested_dataset:
         try:
@@ -225,6 +342,14 @@ def list_inferences(current_user_id):
             return jsonify({"error": "Invalid dataset_id"}), 400
     if status := request.args.get("status"):
         query["status"] = status
+    # Optional: filter by model id (e.g., ?model_id=cellpose_default)
+    if model_id := request.args.get("model_id"):
+        query["model_id"] = model_id
+    if archived := request.args.get("archived"):
+        if archived.lower() in {'1', 'true', 'yes', 'on'}:
+            query["archived"] = True
+        elif archived.lower() in {'0', 'false', 'no', 'off'}:
+            query["archived"] = {"$ne": True}
 
     records = list(db.inferences.find(query).sort("created_at", -1))
     for record in records:

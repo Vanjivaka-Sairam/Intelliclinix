@@ -1,5 +1,9 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from services.storage import save_file_to_gridfs # Images still use GridFS
+from blueprints.models import get_model_by_id
+from services.inference_manager import start_managed_inference
+from bson.objectid import ObjectId
+import json as _json
 from db import get_db
 import datetime
 from bson.objectid import ObjectId
@@ -44,10 +48,53 @@ def upload_dataset(current_user_id):
     }
     dataset_id = db.datasets.insert_one(dataset_doc).inserted_id
 
-    return jsonify({
+    response_payload = {
         "message": "Dataset created successfully",
         "dataset_id": str(dataset_id)
-    }), 201
+    }
+
+    # Optional: Run inference immediately after upload
+    run_inference_flag = request.form.get('run_inference') or request.form.get('run')
+    if run_inference_flag and str(run_inference_flag).lower() in {'1', 'true', 'yes', 'on'}:
+        # Determine model and params
+        model_id = request.form.get('model_id', 'cellpose_default')
+        model_def = get_model_by_id(model_id)
+        if not model_def:
+            return jsonify({"error": f"Unknown model_id '{model_id}'"}), 400
+
+        params_raw = request.form.get('params')
+        try:
+            params = _json.loads(params_raw) if params_raw else {}
+        except Exception:
+            return jsonify({"error": "Invalid JSON in params"}), 400
+
+        params.setdefault('diameter', None)
+        params.setdefault('channels', [0, 0])
+
+        inference_doc = {
+            "dataset_id": ObjectId(dataset_id),
+            "requested_by": ObjectId(current_user_id),
+            "params": params,
+            "model_id": model_id,
+            "runner_name": model_def.get('runner_name'),
+            "status": "queued",
+            "created_at": datetime.datetime.utcnow(),
+            "results": []
+        }
+
+        inference_id = db.inferences.insert_one(inference_doc).inserted_id
+
+        # Start inference synchronously (same behavior as /inferences/start endpoint)
+        try:
+            start_managed_inference(str(inference_id), params)
+            response_payload['inference_id'] = str(inference_id)
+        except Exception as e:
+            # update inference doc to failed
+            db.inferences.update_one({"_id": inference_id}, {"$set": {"status": "failed", "finished_at": datetime.datetime.utcnow(), "notes": str(e)}})
+            current_app.logger.error(f"Failed to run inference created from upload: {e}")
+            return jsonify({"error": f"Dataset saved but inference failed to start: {str(e)}"}), 500
+
+    return jsonify(response_payload), 201
 
 @datasets_bp.route('/', methods=['GET'])
 @jwt_required
