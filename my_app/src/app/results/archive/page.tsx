@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Download } from "lucide-react";
+import { 
+  Loader2, 
+  Download, 
+  Trash2, 
+  Archive, 
+  RefreshCcw, // Icon for Restore
+  Filter, 
+  CheckSquare 
+} from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import { apiFetch } from "@/lib/api";
 import { toast } from "react-hot-toast";
@@ -19,10 +27,15 @@ export default function ArchivePage() {
   const { isLoading } = useAuthGuard();
   const [records, setRecords] = useState<InferenceRecord[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isDownloading, setIsDownloading] = useState<string | null>(null);
+  
+  // State for metadata lookup
   const [modelsList, setModelsList] = useState<any[]>([]);
+  const [datasetMap, setDatasetMap] = useState<Record<string, string>>({});
+  
   const [modelFilter, setModelFilter] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
+  // 1. Load Archived Results
   useEffect(() => {
     if (isLoading) return;
 
@@ -43,19 +56,28 @@ export default function ArchivePage() {
     loadArchived();
   }, [isLoading, modelFilter]);
 
+  // 2. Load Models & Datasets for Lookup
   useEffect(() => {
     if (isLoading) return;
-    async function loadModels() {
+    async function loadMetaData() {
+      // Fetch Models
       try {
         const resp = await apiFetch('/api/models/');
-        if (!resp.ok) return;
-        const data = await resp.json();
-        setModelsList(data);
-      } catch (e) {
-        console.warn('Failed to load models');
-      }
+        if (resp.ok) setModelsList(await resp.json());
+      } catch (e) { console.warn('Failed to load models'); }
+
+      // Fetch Datasets
+      try {
+        const resp = await apiFetch('/api/datasets/');
+        if (resp.ok) {
+          const data = await resp.json();
+          const map: Record<string, string> = {};
+          data.forEach((ds: any) => { map[ds._id] = ds.name; });
+          setDatasetMap(map);
+        }
+      } catch (e) { console.warn('Failed to load datasets'); }
     }
-    loadModels();
+    loadMetaData();
   }, [isLoading]);
 
   const downloadZip = async (id: string) => {
@@ -83,157 +105,268 @@ export default function ArchivePage() {
     }
   };
 
+  const handleBulkRestore = async () => {
+    try {
+      const resp = await apiFetch('/api/inferences/archive', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ ids: selectedIds, archived: false }) 
+      });
+      if (!resp.ok) throw new Error('Unarchive failed');
+      
+      toast.success(`Restored ${selectedIds.length} inferences`);
+      setRecords((r) => r.filter((rec) => !selectedIds.includes(rec._id)));
+      setSelectedIds([]);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to restore selected items');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if(!confirm("This will permanently delete the selected records. This cannot be undone.")) return;
+    try {
+      for (const id of selectedIds) {
+        await apiFetch(`/api/inferences/${id}`, { method: 'DELETE' });
+      }
+      toast.success('Permanently deleted selected inferences');
+      setRecords((r) => r.filter((rec) => !selectedIds.includes(rec._id)));
+      setSelectedIds([]);
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to delete selected items');
+    }
+  };
+
+  const handleRestoreSingle = async (id: string) => {
+    try {
+      const resp = await apiFetch('/api/inferences/archive', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ ids: [id], archived: false }) 
+      });
+      if (!resp.ok) throw new Error('Unarchive failed');
+      toast.success('Inference restored to active list');
+      setRecords((r) => r.filter((x) => x._id !== id));
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to restore');
+    }
+  };
+
+  const handleDeleteSingle = async (id: string) => {
+    if(!confirm("Permanently delete this record?")) return;
+    try {
+      const resp = await apiFetch(`/api/inferences/${id}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error('Delete failed');
+      toast.success('Inference permanently deleted');
+      setRecords((r) => r.filter((rec) => rec._id !== id));
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to delete');
+    }
+  };
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-cvat-bg-primary">
-        <Loader2 className="h-6 w-6 animate-spin text-cvat-primary" />
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-cvat-bg-primary">
+    <div className="min-h-screen bg-slate-50">
       <DashboardNav />
-      <div className="max-w-6xl mx-auto px-4 py-10">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold text-cvat-text-primary">Archived Inferences</h1>
-          <p className="text-sm text-cvat-text-secondary">Previously archived inferences can be restored or deleted permanently.</p>
+      
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Archived Inferences</h1>
+            <p className="mt-1 text-slate-500">Restore items to the main dashboard or permanently delete them.</p>
+          </div>
+          <div className="mt-4 md:mt-0">
+             <Link 
+              href="/results" 
+              className="inline-flex items-center text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors"
+            >
+              ← Back to Active Results
+            </Link>
+          </div>
         </div>
 
         {records.length === 0 ? (
-          <div className="cvat-card p-6 text-center text-cvat-text-secondary">No archived inferences found.</div>
-        ) : (
-          <div className="cvat-card overflow-hidden md:flex md:items-stretch">
-            <div className="md:flex-1 md:overflow-auto">
-              <table className="min-w-full divide-y divide-cvat-border">
-              <thead className="bg-cvat-bg-tertiary">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-cvat-text-secondary uppercase tracking-wider">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.length > 0 && selectedIds.length === records.length}
-                      onChange={(e) => (e.target.checked ? setSelectedIds(records.map((r) => r._id)) : setSelectedIds([]))}
-                    />
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-cvat-text-secondary uppercase tracking-wider">Job</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-cvat-text-secondary uppercase tracking-wider">Dataset</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-cvat-text-secondary uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-cvat-text-secondary uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-cvat-border bg-white">
-                {records.map((record) => (
-                  <tr key={record._id}>
-                    <td className="px-6 py-4 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(record._id)}
-                        onChange={() =>
-                          setSelectedIds((current) => (current.includes(record._id) ? current.filter((x) => x !== record._id) : [...current, record._id]))
-                        }
-                      />
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-cvat-text-primary">
-                      <Link href={`/results/${record._id}`} className="text-cvat-primary hover:underline">{record._id}</Link>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-cvat-text-secondary">{record.dataset_id}</td>
-                    <td className="px-6 py-4">
-                      <span className={`text-xs font-semibold px-3 py-1 rounded-full ${record.status === "completed" ? "bg-emerald-100 text-emerald-700" : record.status === "failed" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>
-                        {record.status.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right text-sm flex gap-2 justify-end">
-                      <button onClick={() => downloadZip(record._id)} className="inline-flex items-center gap-2 rounded-md border border-cvat-border px-3 py-2 text-cvat-text-secondary hover:border-cvat-primary hover:text-cvat-primary disabled:opacity-50" disabled={isDownloading === record._id}>
-                        {isDownloading === record._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download
-                      </button>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const resp = await apiFetch('/api/inferences/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [record._id], archived: false }) });
-                            if (!resp.ok) throw new Error('Unarchive failed');
-                            toast.success('Inference restored');
-                            setRecords((r) => r.filter((x) => x._id !== record._id));
-                          } catch (e) {
-                            console.error(e);
-                            toast.error('Failed to unarchive');
-                          }
-                        }}
-                        className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
-                      >
-                        Restore
-                      </button>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const resp = await apiFetch(`/api/inferences/${record._id}`, { method: 'DELETE' });
-                            if (!resp.ok) throw new Error('Delete failed');
-                            toast.success('Inference deleted');
-                            setRecords((r) => r.filter((rec) => rec._id !== record._id));
-                          } catch (e) {
-                            console.error(e);
-                            toast.error('Failed to delete');
-                          }
-                        }}
-                        className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-rose-600 hover:bg-rose-50"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              </table>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
+            <div className="mx-auto h-12 w-12 text-slate-400 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+              <Archive className="h-6 w-6" />
             </div>
-            <aside className="hidden md:block md:w-56 md:sticky md:top-28 md:self-start p-4">
-              <select value={modelFilter ?? ''} onChange={(e) => setModelFilter(e.target.value || null)} className="rounded border px-3 py-2 w-full md:w-auto mb-3">
-                <option value="">All models</option>
-                {modelsList.map((m) => (
-                  <option key={m._id} value={m._id}>{m.name}</option>
-                ))}
-              </select>
+            <h3 className="text-lg font-medium text-slate-900">Archive is empty</h3>
+            <p className="mt-1 text-slate-500">No archived inferences found.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            
+            {/* LEFT: Table (Span 3) */}
+            <div className="lg:col-span-3">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-200">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-4 text-left">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            checked={selectedIds.length > 0 && selectedIds.length === records.length}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedIds(records.map((r) => r._id));
+                              else setSelectedIds([]);
+                            }}
+                          />
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Job ID</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Dataset</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-slate-200">
+                      {records.map((record) => (
+                        <tr key={record._id} className={`hover:bg-slate-50 transition-colors ${selectedIds.includes(record._id) ? 'bg-blue-50/50' : ''}`}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              checked={selectedIds.includes(record._id)}
+                              onChange={() =>
+                                setSelectedIds((current) =>
+                                  current.includes(record._id) ? current.filter((x) => x !== record._id) : [...current, record._id]
+                                )
+                              }
+                            />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm font-medium text-slate-700 font-mono">
+                                {record._id.substring(0, 8)}...
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 font-medium">
+                            {datasetMap[record.dataset_id] || (
+                              <span className="text-slate-400 font-mono text-xs">
+                                {record.dataset_id.substring(0, 12)}...
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                              ${record.status === "completed" ? "bg-emerald-100 text-emerald-800" : 
+                                record.status === "failed" ? "bg-rose-100 text-rose-800" : 
+                                "bg-amber-100 text-amber-800"}`}>
+                              {record.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => downloadZip(record._id)}
+                                disabled={isDownloading === record._id}
+                                className="text-slate-400 hover:text-blue-600 transition-colors p-1"
+                                title="Download"
+                              >
+                                {isDownloading === record._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                              </button>
+                              
+                              <button
+                                onClick={() => handleRestoreSingle(record._id)}
+                                className="text-slate-400 hover:text-emerald-600 transition-colors p-1"
+                                title="Restore"
+                              >
+                                <RefreshCcw className="h-4 w-4" />
+                              </button>
 
-              <button
-                disabled={selectedIds.length === 0}
-                onClick={async () => {
-                  try {
-                    const resp = await apiFetch('/api/inferences/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: selectedIds, archived: false }) });
-                    if (!resp.ok) throw new Error('Unarchive failed');
-                    toast.success('Restored selected inferences');
-                    setRecords((r) => r.filter((rec) => !selectedIds.includes(rec._id)));
-                    setSelectedIds([]);
-                  } catch (e) {
-                    console.error(e);
-                    toast.error('Failed to restore selected');
-                  }
-                }}
-                className="w-full md:w-auto px-3 py-2 rounded-md bg-cvat-primary text-white mb-2"
-              >
-                Restore selected
-              </button>
+                              <button
+                                onClick={() => handleDeleteSingle(record._id)}
+                                className="text-slate-400 hover:text-rose-600 transition-colors p-1"
+                                title="Delete Permanently"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
 
-              <button
-                disabled={selectedIds.length === 0}
-                onClick={async () => {
-                  try {
-                    for (const id of selectedIds) {
-                      await apiFetch(`/api/inferences/${id}`, { method: 'DELETE' });
-                    }
-                    toast.success('Deleted selected inferences');
-                    setRecords((r) => r.filter((rec) => !selectedIds.includes(rec._id)));
-                    setSelectedIds([]);
-                  } catch (e) {
-                    console.error(e);
-                    toast.error('Failed to delete selected');
-                  }
-                }}
-                className="w-full md:w-auto px-3 py-2 rounded-md border text-rose-600"
-              >
-                Delete selected
-              </button>
-            </aside>
+            {/* RIGHT: Sticky Sidebar (Span 1) */}
+            <div className="lg:col-span-1">
+               <div className="sticky top-6 space-y-6">
+                 
+                 {/* Filter */}
+                 <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex items-center gap-2 mb-4 text-slate-900 font-semibold">
+                      <Filter className="w-4 h-4 text-slate-500" />
+                      <h2>Filter Archive</h2>
+                    </div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase">By Model</label>
+                    <select 
+                      value={modelFilter ?? ''} 
+                      onChange={(e) => setModelFilter(e.target.value || null)} 
+                      className="w-full rounded-lg border-slate-200 text-sm focus:border-blue-500 focus:ring-blue-500"
+                    >
+                      <option value="">All models</option>
+                      {modelsList.map((m) => (
+                        <option key={m._id} value={m._id}>{m.name}</option>
+                      ))}
+                    </select>
+                 </div>
+
+                 {/* Bulk Actions */}
+                 <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2 text-slate-900 font-semibold">
+                        <CheckSquare className="w-4 h-4 text-slate-500" />
+                        <h2>Bulk Actions</h2>
+                      </div>
+                      {selectedIds.length > 0 && (
+                        <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                          {selectedIds.length}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <button
+                        disabled={selectedIds.length === 0}
+                        onClick={handleBulkRestore}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+                      >
+                        <RefreshCcw className="w-4 h-4" />
+                        Restore Selected
+                      </button>
+
+                      <button
+                        disabled={selectedIds.length === 0}
+                        onClick={handleBulkDelete}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete Forever
+                      </button>
+                    </div>
+                 </div>
+
+               </div>
+            </div>
+
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

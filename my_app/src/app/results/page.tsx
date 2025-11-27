@@ -144,12 +144,14 @@ export default function ResultsPage() {
   };
 
   const handleDeleteSingle = async (id: string) => {
+    if (!confirm("Permanently delete this inference? This action cannot be undone.")) return;
+
     try {
       const resp = await apiFetch(`/api/inferences/${id}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error('Delete failed');
       toast.success('Inference deleted');
       setRecords((r) => r.filter((rec) => rec._id !== id));
-    } catch (e) {
+      } catch (e) {
       console.error(e);
       toast.error('Failed to delete inference');
     }
