@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, current_app
 from db import get_db
 from bson.objectid import ObjectId
 from utils.security import jwt_required
-from services.cvat_api import create_task_from_inference
+from services.cellpose_cvat_service import create_task_from_inference
 
 cvat_bp = Blueprint('cvat', __name__)
 

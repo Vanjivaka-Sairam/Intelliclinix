@@ -3,7 +3,7 @@ import zipfile
 import numpy as np
 from PIL import Image
 
-from server.services.cvat_api import create_cvat_annotation_zip
+from server.services.cellpose_cvat_service import create_cvat_annotation_zip
 from flask import Flask
 
 
@@ -61,17 +61,17 @@ def test_create_zip_basic(tmp_path):
 
         namelist = zf.namelist()
 
-        # Ensure SegmentationClass and SegmentationObject entries exist
-        assert 'SegmentationClass/image_patches/image1.png' in namelist
-        assert 'SegmentationObject/image_patches/image1.png' in namelist
-        assert 'SegmentationClass/image_patches/image2.png' in namelist
-        assert 'SegmentationObject/image_patches/image2.png' in namelist
+        # Ensure SegmentationClass and SegmentationObject entries exist (new layout: no image_patches/ prefix)
+        assert 'SegmentationClass/image1.png' in namelist
+        assert 'SegmentationObject/image1.png' in namelist
+        assert 'SegmentationClass/image2.png' in namelist
+        assert 'SegmentationObject/image2.png' in namelist
 
         # Ensure ImageSets/Segmentation/default.txt exists and contains basenames without extension
         assert 'ImageSets/Segmentation/default.txt' in namelist
         default_txt = zf.read('ImageSets/Segmentation/default.txt').decode('utf-8').strip().splitlines()
-        assert 'image_patches/image1' in default_txt
-        assert 'image_patches/image2' in default_txt
+        assert 'image1' in default_txt
+        assert 'image2' in default_txt
 
         # Ensure labelmap exists and contains nucleus mapping
         assert 'labelmap.txt' in namelist

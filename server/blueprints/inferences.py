@@ -6,7 +6,7 @@ from utils.security import jwt_required
 from db import get_db, get_fs
 from blueprints.models import get_model_by_id
 from services.inference_manager import start_managed_inference
-from services.cvat_api import create_task_from_inference
+from services.cellpose_cvat_service import create_task_from_inference
 import io
 import zipfile
 import os
