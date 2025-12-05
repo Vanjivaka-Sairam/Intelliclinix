@@ -30,4 +30,4 @@ build/
 *.log
 
 server/temp.md
-server/inference_workflow.txt
+server/models
