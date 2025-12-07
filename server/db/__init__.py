@@ -9,7 +9,7 @@ fs = None
 def init_db(app):
     mongo.init_app(app)
     global fs
-    fs = GridFS(mongo.db) #for storing models and file(since they are large)
+    fs = GridFS(mongo.db)
 
 def get_db():
     return mongo.db 
