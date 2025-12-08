@@ -9,23 +9,12 @@ from services.cellpose_runner import CellposeRunner
 from services.model_runner_base import ModelRunner
 
 
-# Registry mapping logical runner names to concrete runner classes.
-# Additional runners can be added here without changing the API layer.
 RUNNER_REGISTRY: Dict[str, Type[ModelRunner]] = {
     "cellpose": CellposeRunner,
 }
 
 
 def start_managed_inference(inference_id_str: str, params: dict) -> None:
-    """
-    Dispatcher/context that selects and executes the appropriate model runner.
-
-    How it works:
-    1. Load the inference document by ID
-    2. Read the stored runner_name from the document
-    3. Look up the corresponding runner class in RUNNER_REGISTRY
-    4. Instantiate the runner and invoke run_inference_job()
-    """
     db = get_db()
     inference_id = ObjectId(inference_id_str)
 
