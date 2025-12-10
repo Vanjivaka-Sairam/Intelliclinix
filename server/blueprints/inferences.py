@@ -6,7 +6,6 @@ from utils.security import jwt_required
 from db import get_db, get_fs
 from blueprints.models import get_model_by_id
 from services.inference_manager import start_managed_inference
-from services.cellpose_cvat_service import create_task_from_inference
 import io
 import zipfile
 import os
@@ -66,11 +65,6 @@ def classify_inference(current_user_id, inference_id):
 @inferences_bp.route('/<inference_id>', methods=['DELETE'])
 @jwt_required
 def delete_inference(current_user_id, inference_id):
-    """Delete an inference and (optionally) associated GridFS artifacts.
-
-    This performs a hard delete by default and attempts to remove associated
-    GridFS files referenced in the inference results' artifacts.
-    """
     db = get_db()
     fs = get_fs()
 
@@ -129,32 +123,24 @@ def bulk_archive_inferences(current_user_id):
     result = db.inferences.update_many({"_id": {"$in": object_ids}, "requested_by": ObjectId(current_user_id)}, {"$set": {"archived": archived}})
     return jsonify({"matched": result.matched_count, "modified": result.modified_count}), 200
 
+
+
+
 @inferences_bp.route('/start', methods=['POST'])
 @jwt_required
 def start_inference(current_user_id):
-    """
-    Starts a new inference job.
 
-    The endpoint path and general contract remain the same, but the specific
-    model implementation is chosen dynamically via the model registry so that
-    new models can be added without changing this endpoint.
-    """
     db = get_db()
     data = request.json
-    
+
     dataset_id = data.get('dataset_id')
-    # Model selection (defaults to Cellpose if not specified)
-    model_id = data.get('model_id', 'cellpose_default')
+    model_id = data.get('model_id', 'cellpose_model') #setting cellpose as a default model
     model_def = get_model_by_id(model_id)
     if not model_def:
         return jsonify({"error": f"Unknown model_id '{model_id}'"}), 400
 
     runner_name = model_def["runner_name"]
-
-    # Get model params from request, with Cellpose-friendly defaults for now
     params = data.get('params', {}) or {}
-    params.setdefault('diameter', None)
-    params.setdefault('channels', [0, 0])
 
     if not dataset_id:
         return jsonify({"error": "dataset_id is required"}), 400
@@ -172,9 +158,7 @@ def start_inference(current_user_id):
     inference_id = db.inferences.insert_one(inference_doc).inserted_id
 
     try:
-        # Dispatch to the appropriate model runner (strategy) based on runner_name.
-        # The dispatcher will look up the runner from the registry and execute it.
-        start_managed_inference(str(inference_id), params)
+        start_managed_inference(str(inference_id))
 
     except Exception as e:
         db.inferences.update_one(
@@ -370,63 +354,3 @@ def list_inferences(current_user_id):
                     artifact["gridfs_id"] = str(artifact["gridfs_id"])
 
     return jsonify(records), 200
-
-
-@inferences_bp.route('/<inference_id>/push_to_cvat', methods=['POST'])
-@jwt_required
-def push_inference_to_cvat(current_user_id, inference_id):
-    """
-    Pushes selected images and masks from an inference result to CVAT.
-    
-    The inference must be completed and owned by the current user.
-    Accepts an optional list of filenames to push only selected images.
-    """
-    db = get_db()
-    
-    # Verify inference exists and belongs to user
-    try:
-        inference_obj_id = ObjectId(inference_id)
-    except Exception:
-        return jsonify({"error": "Invalid inference_id format"}), 400
-    
-    inference = db.inferences.find_one({"_id": inference_obj_id})
-    if not inference:
-        return jsonify({"error": "Inference not found"}), 404
-    
-    if str(inference['requested_by']) != current_user_id:
-        return jsonify({"error": "Forbidden"}), 403
-    
-    if inference['status'] != 'completed':
-        return jsonify({"error": f"Inference is not completed (status: {inference['status']})"}), 400
-    
-    # Get optional task name and selected filenames from request
-    data = request.get_json() or {}
-    task_name = data.get('task_name')
-    selected_filenames = data.get('filenames')  # List of filenames to include
-    
-    # Optional: Get CVAT credentials from request (if user wants to use different account)
-    username = data.get('username')
-    password = data.get('password')
-    
-    try:
-        result = create_task_from_inference(
-            inference_id=inference_id,
-            task_name=task_name,
-            username=username,
-            password=password,
-            selected_filenames=selected_filenames
-        )
-        
-        return jsonify({
-            "message": "Images sent to CVAT successfully",
-            "task_id": result["task_id"],
-            "task_url": result["task_url"]
-        }), 200
-        
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except TimeoutError as e:
-        return jsonify({"error": str(e)}), 504
-    except Exception as e:
-        current_app.logger.error(f"Error pushing inference to CVAT: {e}", exc_info=True)
-        return jsonify({"error": f"Failed to push to CVAT: {str(e)}"}), 500

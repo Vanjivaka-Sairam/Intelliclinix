@@ -19,7 +19,7 @@ class ModelRunner(ABC):
         self.fs = get_fs()
 
     @abstractmethod
-    def run_inference_job(self, inference_id_str: str, params: Dict[str, Any]) -> None:
+    def run_inference_job(self, inference_id_str: str) -> None:
         """
         Run inference for the given inference document.
 

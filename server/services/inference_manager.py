@@ -14,7 +14,7 @@ RUNNER_REGISTRY: Dict[str, Type[ModelRunner]] = {
 }
 
 
-def start_managed_inference(inference_id_str: str, params: dict) -> None:
+def start_managed_inference(inference_id_str: str) -> None:
     db = get_db()
     inference_id = ObjectId(inference_id_str)
 
@@ -44,7 +44,7 @@ def start_managed_inference(inference_id_str: str, params: dict) -> None:
         current_app.logger.info(
             f"[DISPATCHER] Invoking run_inference_job on {runner_class.__name__}"
         )
-        runner.run_inference_job(inference_id_str, params)
+        runner.run_inference_job(inference_id_str)
 
         current_app.logger.info(
             f"[DISPATCHER] Inference {inference_id_str} completed successfully"

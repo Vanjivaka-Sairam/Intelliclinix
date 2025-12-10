@@ -3,13 +3,11 @@ from utils.security import jwt_required
 
 models_bp = Blueprint("models", __name__)
 
-# NOTE: Each model definition includes a logical `runner_name` that will be
-# resolved to an actual implementation by the services.registry module.
 AVAILABLE_MODELS = [
     {
-        "_id": "cellpose_default",
+        "_id": "cellpose_model",
         "name": "Cellpose",
-        "runner_name": "cellpose",
+        "runner_name": "cellpose_model",
         "description": "Cellpose-based segmentation model",
     }
 ]

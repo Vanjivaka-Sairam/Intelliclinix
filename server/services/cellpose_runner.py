@@ -101,7 +101,7 @@ def run_cellpose_model(image_bytes, diameter, channels):
 class CellposeRunner(ModelRunner):
     """Concrete strategy for running Cellpose-based inference."""
 
-    def run_inference_job(self, inference_id_str: str, params: dict) -> None:
+    def run_inference_job(self, inference_id_str: str) -> None:
         """
         Execute a Cellpose inference job.
 
@@ -119,8 +119,8 @@ class CellposeRunner(ModelRunner):
         inference_doc = self.db.inferences.find_one({"_id": inference_id})
         dataset_doc = self.db.datasets.find_one({"_id": inference_doc["dataset_id"]})
 
-        diameter = params.get("diameter")
-        channels = params.get("channels", [0, 0])
+        diameter = "diameter"
+        channels = [0, 0]
 
         results = []
         for file_ref in dataset_doc["files"]:
