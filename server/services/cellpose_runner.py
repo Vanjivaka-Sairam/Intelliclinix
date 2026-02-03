@@ -73,7 +73,19 @@ def run_cellpose_model(image_bytes, diameter, channels):
     
     img = np.array(Image.open(io.BytesIO(image_bytes)))
     
-    diam = None if (diameter is None or diameter <= 0) else float(diameter)
+    diam = None
+    if diameter is not None:
+        try:
+             # Handle string "None" or similar if passed from frontend
+             if str(diameter).lower() == 'none' or diameter == "":
+                 diam = None
+             else:
+                 d_val = float(diameter)
+                 if d_val > 0:
+                     diam = d_val
+        except ValueError:
+             print(f"Warning: Invalid diameter value '{diameter}', using None (auto).")
+             diam = None
     
     print(f"Running model.eval with channels={channels}, diameter={diam}")
     out = model.eval(img, channels=channels, diameter=diam, progress=False)
@@ -118,9 +130,12 @@ class CellposeRunner(ModelRunner):
 
         inference_doc = self.db.inferences.find_one({"_id": inference_id})
         dataset_doc = self.db.datasets.find_one({"_id": inference_doc["dataset_id"]})
+        
+        # Extract params from inference document
+        params = inference_doc.get("params", {})
+        diameter = params.get("diameter", 30) # Default to 30 if not provided
+        channels = params.get("channels", [0, 0])
 
-        diameter = "diameter"
-        channels = [0, 0]
 
         results = []
         for file_ref in dataset_doc["files"]:

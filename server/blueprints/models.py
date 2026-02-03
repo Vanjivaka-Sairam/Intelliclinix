@@ -7,7 +7,7 @@ AVAILABLE_MODELS = [
     {
         "_id": "cellpose_model",
         "name": "Cellpose",
-        "runner_name": "cellpose_model",
+        "runner_name": "cellpose",
         "description": "Cellpose-based segmentation model",
     }
 ]

@@ -1,19 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "react-hot-toast";
 import {
     Loader2, Download, Send,
     ZoomIn, ZoomOut, RotateCw,
-    ChevronLeft, ChevronRight,
-    Layers, Eye, EyeOff,
-    Maximize2, X,
-    CheckSquare, Square
+    Maximize2
 } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import { apiFetch } from "@/lib/api";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
+import CanvasViewer, { CanvasViewerRef } from "@/components/ImageViewer/CanvasViewer";
 
 type InferenceResult = {
     source_filename: string;
@@ -36,7 +34,8 @@ type ImageEntry = {
 };
 
 export default function InferenceDetailPage() {
-    const { inferenceId } = useParams<{ inferenceId: string }>();
+    const searchParams = useSearchParams();
+    const inferenceId = searchParams.get("id");
     const { isLoading } = useAuthGuard();
     const [inference, setInference] = useState<InferenceResponse | null>(null);
     const [isPolling, setIsPolling] = useState(true);
@@ -46,6 +45,10 @@ export default function InferenceDetailPage() {
     const [activeOverlay, setActiveOverlay] = useState<"classMask" | "instanceMask">("instanceMask");
     const [isSending, setIsSending] = useState(false);
     const [cvatLink, setCvatLink] = useState<string | null>(null);
+    const [smoothImage, setSmoothImage] = useState(false);
+
+    // We can track refs for each viewer if we want to control them externally, 
+    // but for now, individual controls inside the viewer or simple scroll zoom is efficient.
     const pollRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
@@ -227,7 +230,6 @@ export default function InferenceDetailPage() {
                             <Download className="h-4 w-4" />
                             Download ZIP
                         </button>
-                        {/* classification UI removed — filtering by model is done on the results list page */}
                         <button
                             onClick={sendToCvat}
                             className="flex items-center gap-2 rounded-md bg-cvat-primary px-4 py-2 text-sm text-white disabled:opacity-50"
@@ -240,7 +242,6 @@ export default function InferenceDetailPage() {
                             )}
                             Send to CVAT
                         </button>
-                        {/* Archive + Delete removed from detail viewer to avoid destructive actions while inspecting overlays */}
                     </div>
                 </div>
 
@@ -265,13 +266,13 @@ export default function InferenceDetailPage() {
                             const entry = imageMap[result.source_filename];
                             return (
                                 <div key={result.source_filename} className="cvat-card overflow-hidden">
-                                    <div className="flex items-start justify-between p-4">
+                                    <div className="flex items-start justify-between p-4 bg-cvat-bg-secondary border-b border-cvat-border">
                                         <div>
                                             <p className="font-medium text-cvat-text-primary">{result.source_filename}</p>
                                             <p className="text-xs text-cvat-text-secondary">
                                                 {selectedFilenames.includes(result.source_filename)
                                                     ? "Marked for CVAT"
-                                                    : "Review and mark for correction if needed"}
+                                                    : "Review and mark for correction"}
                                             </p>
                                         </div>
                                         <label className="inline-flex items-center gap-2 text-sm text-cvat-text-primary">
@@ -284,25 +285,20 @@ export default function InferenceDetailPage() {
                                             Needs correction
                                         </label>
                                     </div>
-                                    <div className="relative bg-black/5">
-                                        {entry?.source ? (
-                                            <img
-                                                src={entry.source}
-                                                alt={result.source_filename}
-                                                className="w-full h-auto object-contain"
+                                    <div className="relative h-[400px] w-full bg-black">
+                                        {entry?.source && (
+                                            <CanvasViewer
+                                                sourceUrl={entry.source}
+                                                maskUrl={entry?.[activeOverlay]}
+                                                overlayOpacity={overlayOpacity}
+                                                smoothImage={smoothImage}
+                                                className="w-full h-full"
                                             />
-                                        ) : (
-                                            <div className="flex items-center justify-center py-20 text-cvat-text-secondary">
+                                        )}
+                                        {!entry?.source && (
+                                            <div className="flex items-center justify-center h-full text-cvat-text-secondary">
                                                 Loading source image…
                                             </div>
-                                        )}
-                                        {entry?.[activeOverlay] && (
-                                            <img
-                                                src={entry[activeOverlay]}
-                                                alt={`${result.source_filename}-overlay`}
-                                                className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                                                style={{ opacity: overlayOpacity }}
-                                            />
                                         )}
                                     </div>
                                 </div>
@@ -312,7 +308,7 @@ export default function InferenceDetailPage() {
                 )}
 
                 {isReady && (
-                    <div className="cvat-card p-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="cvat-card p-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between sticky bottom-4 z-10 shadow-lg border-cvat-primary/20">
                         <div className="flex items-center gap-4 text-sm text-cvat-text-secondary">
                             <span>Overlay:</span>
                             <button
@@ -343,11 +339,22 @@ export default function InferenceDetailPage() {
                                 step={0.05}
                                 value={overlayOpacity}
                                 onChange={(event) => setOverlayOpacity(Number(event.target.value))}
-                                className="w-40"
+                                className="w-32"
                             />
-                            <span className="w-12 text-right text-cvat-text-primary">
+                            <span className="w-8 text-right text-cvat-text-primary">
                                 {Math.round(overlayOpacity * 100)}%
                             </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                            <label className="flex items-center gap-2 cursor-pointer text-cvat-text-primary">
+                                <input
+                                    type="checkbox"
+                                    checked={smoothImage}
+                                    onChange={(e) => setSmoothImage(e.target.checked)}
+                                    className="rounded border-cvat-border"
+                                />
+                                Smooth Image
+                            </label>
                         </div>
                     </div>
                 )}

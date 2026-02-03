@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { 
-  Loader2, 
-  Download, 
-  Trash2, 
-  Archive, 
-  Filter, 
-  CheckSquare 
+import {
+  Loader2,
+  Download,
+  Trash2,
+  Archive,
+  Filter,
+  CheckSquare
 } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import { apiFetch } from "@/lib/api";
@@ -26,11 +26,11 @@ export default function ResultsPage() {
   const { isLoading } = useAuthGuard();
   const [records, setRecords] = useState<InferenceRecord[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  
+
   // New State for Models and Datasets Lookup
   const [modelsList, setModelsList] = useState<any[]>([]);
-  const [datasetMap, setDatasetMap] = useState<Record<string, string>>({}); 
-  
+  const [datasetMap, setDatasetMap] = useState<Record<string, string>>({});
+
   const [modelFilter, setModelFilter] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
@@ -79,7 +79,7 @@ export default function ResultsPage() {
         }
       } catch (e) { console.warn('Failed to load datasets'); }
     }
-    
+
     loadMetaData();
   }, [isLoading]);
 
@@ -117,7 +117,7 @@ export default function ResultsPage() {
       });
       if (!response.ok) throw new Error("Archive failed");
       toast.success(`Archived ${selectedIds.length} inferences`);
-      
+
       const q = modelFilter ? `?model_id=${encodeURIComponent(modelFilter)}` : "";
       const data = await apiFetch(`/api/inferences/${q}`);
       setRecords(await data.json());
@@ -129,7 +129,7 @@ export default function ResultsPage() {
   };
 
   const handleBulkDelete = async () => {
-    if(!confirm("Are you sure you want to delete these records?")) return;
+    if (!confirm("Are you sure you want to delete these records?")) return;
     try {
       for (const id of selectedIds) {
         await apiFetch(`/api/inferences/${id}`, { method: "DELETE" });
@@ -151,7 +151,7 @@ export default function ResultsPage() {
       if (!resp.ok) throw new Error('Delete failed');
       toast.success('Inference deleted');
       setRecords((r) => r.filter((rec) => rec._id !== id));
-      } catch (e) {
+    } catch (e) {
       console.error(e);
       toast.error('Failed to delete inference');
     }
@@ -168,7 +168,7 @@ export default function ResultsPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <DashboardNav />
-      
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
@@ -176,8 +176,8 @@ export default function ResultsPage() {
             <p className="mt-1 text-slate-500">Manage your model outputs and download annotations.</p>
           </div>
           <div className="mt-4 md:mt-0">
-            <Link 
-              href="/results/archive" 
+            <Link
+              href="/results/archive"
               className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
             >
               <Archive className="w-4 h-4 mr-2" />
@@ -229,8 +229,8 @@ export default function ResultsPage() {
                               checked={selectedIds.includes(record._id)}
                               onChange={() =>
                                 setSelectedIds((current) =>
-                                  current.includes(record._id) 
-                                    ? current.filter((x) => x !== record._id) 
+                                  current.includes(record._id)
+                                    ? current.filter((x) => x !== record._id)
                                     : [...current, record._id]
                                 )
                               }
@@ -238,13 +238,13 @@ export default function ResultsPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <Link
-                              href={`/results/${record._id}`}
+                              href={`/results/inferences?id=${record._id}`}
                               className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline font-mono"
                             >
                               {record._id.substring(0, 8)}...
                             </Link>
                           </td>
-                          
+
                           {/* UPDATED: Dataset Name with ID fallback */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 font-medium">
                             {datasetMap[record.dataset_id] || (
@@ -256,9 +256,9 @@ export default function ResultsPage() {
 
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                              ${record.status === "completed" ? "bg-emerald-100 text-emerald-800" : 
-                                record.status === "failed" ? "bg-rose-100 text-rose-800" : 
-                                "bg-amber-100 text-amber-800"}`}>
+                              ${record.status === "completed" ? "bg-emerald-100 text-emerald-800" :
+                                record.status === "failed" ? "bg-rose-100 text-rose-800" :
+                                  "bg-amber-100 text-amber-800"}`}>
                               {record.status.toUpperCase()}
                             </span>
                           </td>
@@ -295,16 +295,16 @@ export default function ResultsPage() {
 
             <div className="lg:col-span-1">
               <div className="sticky top-6 space-y-6">
-                
+
                 <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                   <div className="flex items-center gap-2 mb-4 text-slate-900 font-semibold">
                     <Filter className="w-4 h-4 text-slate-500" />
                     <h2>Filter Results</h2>
                   </div>
                   <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase">By Model</label>
-                  <select 
-                    value={modelFilter ?? ''} 
-                    onChange={(e) => setModelFilter(e.target.value || null)} 
+                  <select
+                    value={modelFilter ?? ''}
+                    onChange={(e) => setModelFilter(e.target.value || null)}
                     className="w-full rounded-lg border-slate-200 text-sm focus:border-blue-500 focus:ring-blue-500"
                   >
                     <option value="">Show All Models</option>
@@ -315,7 +315,7 @@ export default function ResultsPage() {
                 </div>
 
                 <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                   <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2 text-slate-900 font-semibold">
                       <CheckSquare className="w-4 h-4 text-slate-500" />
                       <h2>Bulk Actions</h2>
@@ -326,7 +326,7 @@ export default function ResultsPage() {
                       </span>
                     )}
                   </div>
-                  
+
                   <div className="space-y-3">
                     <button
                       disabled={selectedIds.length === 0}
