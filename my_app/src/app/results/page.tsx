@@ -33,12 +33,14 @@ export default function ResultsPage() {
 
   const [modelFilter, setModelFilter] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
+  const [isFetching, setIsFetching] = useState(true);
 
   // 1. Load Results
   useEffect(() => {
     if (isLoading) return;
 
     async function loadResults() {
+      setIsFetching(true);
       try {
         const query = modelFilter ? `?model_id=${encodeURIComponent(modelFilter)}` : "";
         const response = await apiFetch(`/api/inferences/${query}`);
@@ -48,12 +50,13 @@ export default function ResultsPage() {
       } catch (error) {
         console.error(error);
         toast.error("Unable to load results");
+      } finally {
+        setIsFetching(false);
       }
     }
 
     loadResults();
   }, [isLoading, modelFilter]);
-
   // 2. Load Models (for Filter) AND Datasets (for Names)
   useEffect(() => {
     if (isLoading) return;
@@ -156,8 +159,7 @@ export default function ResultsPage() {
       toast.error('Failed to delete inference');
     }
   };
-
-  if (isLoading) {
+  if (isLoading || isFetching) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />

@@ -1,4 +1,3 @@
-
 /**
  * viewer.ts
  * Main entry point, equivalent to cvat-canvas/src/typescript/canvas.ts
@@ -9,9 +8,9 @@ import { ViewerModel } from './viewerModel';
 
 export class CvatLikeViewer implements IViewer {
     public model: ViewerModel;
-    private container: HTMLDivElement;
-    private canvas: HTMLCanvasElement;
-    private ctx: CanvasRenderingContext2D;
+    private container!: HTMLDivElement;
+    private canvas!: HTMLCanvasElement;
+    private ctx!: CanvasRenderingContext2D;
 
     // Layers
     private imageBitmap: ImageBitmap | null = null;
@@ -28,7 +27,9 @@ export class CvatLikeViewer implements IViewer {
 
     private isDragging: boolean = false;
     private lastMouse: { x: number; y: number } = { x: 0, y: 0 };
-    private resizeObserver: ResizeObserver;
+    private resizeObserver!: ResizeObserver;
+
+    private isDestroyed: boolean = false;
 
     constructor() {
         this.model = new ViewerModel();
@@ -85,6 +86,7 @@ export class CvatLikeViewer implements IViewer {
         try {
             const response = await fetch(frameData.url);
             const blob = await response.blob();
+            if (this.isDestroyed) return; // Prevent setting if destroyed
             this.imageBitmap = await createImageBitmap(blob);
             this.model.setImageSize(this.imageBitmap.width, this.imageBitmap.height);
             this.model.fit();
@@ -106,13 +108,18 @@ export class CvatLikeViewer implements IViewer {
 
         this.overlayOpacity = data.opacity ?? 0.6;
 
-        // Only load if URL changed or we don't have one
-        // Note: For simplicity, we just reload. efficient caching can be added later.
         try {
             const response = await fetch(data.url);
             const blob = await response.blob();
+
+            if (this.isDestroyed) return;
+
             // Close previous if exists
-            if (this.overlayBitmap) this.overlayBitmap.close();
+            if (this.overlayBitmap) {
+                this.overlayBitmap.close();
+                this.overlayBitmap = null;
+            }
+
             this.overlayBitmap = await createImageBitmap(blob);
             this.requestRender();
         } catch (e) {
@@ -127,17 +134,9 @@ export class CvatLikeViewer implements IViewer {
         const { clientWidth, clientHeight } = this.container;
         if (clientWidth === 0 || clientHeight === 0) return;
 
-        // Basic DPI support
-        // const dpr = window.devicePixelRatio || 1;
-        // For simplicity/performance on heavy images, 1:1 match with CSS pixels is often safer unless text is involved.
-        // But for sharp lines, we might want dpr. Let's stick to 1:1 for now as per "performance" requirement.
-
         this.canvas.width = clientWidth;
         this.canvas.height = clientHeight;
         this.model.setCanvasSize(clientWidth, clientHeight);
-
-        // If the model hasn't been fitted yet (first load), we might want to? 
-        // No, fitCanvas just syncs resolution. fit() is explicit.
 
         this.requestRender();
     }
@@ -158,12 +157,21 @@ export class CvatLikeViewer implements IViewer {
     }
 
     public destroy(): void {
+        this.isDestroyed = true;
         this.resizeObserver.disconnect();
-        if (this.imageBitmap) this.imageBitmap.close();
-        if (this.overlayBitmap) this.overlayBitmap.close();
+        if (this.imageBitmap) {
+            this.imageBitmap.close();
+            this.imageBitmap = null;
+        }
+        if (this.overlayBitmap) {
+            this.overlayBitmap.close();
+            this.overlayBitmap = null;
+        }
         // Remove container content
-        this.container.innerHTML = '';
-        this.container.remove();
+        if (this.container) {
+            this.container.innerHTML = '';
+            this.container.remove();
+        }
     }
 
     // =================================================================
@@ -205,7 +213,7 @@ export class CvatLikeViewer implements IViewer {
             }
         });
 
-        // Basic Touch support for Panning (Pinch zoom is harder to impl in one go)
+        // Basic Touch support for Panning
         this.canvas.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) {
                 this.isDragging = true;
