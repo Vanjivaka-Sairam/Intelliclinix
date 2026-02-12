@@ -61,7 +61,16 @@ def run_cellpose_model(image_bytes, diameter, channels):
     Returns (class_rgb_array, instance_rgb_array)
     """
     
-    model_path = os.path.join(current_app.root_path, 'models', 'trained_cellpose')
+    model_path_str = current_app.config.get("CELLPOSE_MODEL_PATH")
+    
+    if not model_path_str:
+        # Fallback for backward compatibility or dev environments if appropriate,
+        # otherwise raise error.
+        # model_path = os.path.join(current_app.root_path, 'models', 'trained_cellpose')
+        print("Error: CELLPOSE_MODEL_PATH not set in configuration.")
+        raise ValueError("CELLPOSE_MODEL_PATH not configured.")
+        
+    model_path = model_path_str
     
     if not os.path.exists(model_path):
         print(f"FATAL: Model file not found at {model_path}")
@@ -114,12 +123,7 @@ class CellposeRunner(ModelRunner):
     """Concrete strategy for running Cellpose-based inference."""
 
     def run_inference_job(self, inference_id_str: str) -> None:
-        """
-        Execute a Cellpose inference job.
 
-        This mirrors the previous procedural implementation but is now
-        encapsulated as a strategy class.
-        """
         inference_id = ObjectId(inference_id_str)
 
         # Mark job as running

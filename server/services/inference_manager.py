@@ -6,11 +6,13 @@ import datetime
 
 from db import get_db
 from services.cellpose_runner import CellposeRunner
+from services.d_dish_runner import DDishRunner
 from services.model_runner_base import ModelRunner
 
 
 RUNNER_REGISTRY: Dict[str, Type[ModelRunner]] = {
     "cellpose": CellposeRunner,
+    "d_dish": DDishRunner,
 }
 
 

@@ -7,12 +7,6 @@ import datetime
 
 
 class ModelRunner(ABC):
-    """
-    Base class for all model runners (strategy interface).
-
-    Each concrete runner is responsible for implementing the actual inference
-    logic for a specific model family (e.g. Cellpose, UNet, etc.).
-    """
 
     def __init__(self) -> None:
         self.db = get_db()
@@ -30,9 +24,6 @@ class ModelRunner(ABC):
         - Persist outputs and update inference status
         """
         raise NotImplementedError
-
-    # The methods below are helpers inspired by the reference design. They make it
-    # easier for runners to update job status in a consistent way.
 
     def update_inference_status(
         self,

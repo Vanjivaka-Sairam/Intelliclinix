@@ -10,6 +10,11 @@ class Config:
     CVAT_ADMIN_USER = os.getenv('CVAT_ADMIN_USER', 'Vanjivaka_Sairam')
     CVAT_ADMIN_PASSWORD = os.getenv('CVAT_ADMIN_PASSWORD', 'Intelli1@pass')
     
+    # Model Paths
+    CELLPOSE_MODEL_PATH = os.getenv('CELLPOSE_MODEL_PATH')
+    DDISH_CELLPOSE_MODEL_PATH = os.getenv('DDISH_CELLPOSE_MODEL_PATH')
+    DDISH_YOLO_MODEL_PATH = os.getenv('DDISH_YOLO_MODEL_PATH')
+    
 class DevelopmentConfig(Config):
     DEBUG = True
 
