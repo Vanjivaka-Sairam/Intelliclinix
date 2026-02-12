@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { 
-  Loader2, 
-  Download, 
-  Trash2, 
-  Archive, 
+import {
+  Loader2,
+  Download,
+  Trash2,
+  Archive,
   RefreshCcw, // Icon for Restore
-  Filter, 
-  CheckSquare 
+  Filter,
+  CheckSquare
 } from "lucide-react";
 import DashboardNav from "@/components/DashboardNav";
 import { apiFetch } from "@/lib/api";
@@ -27,11 +27,11 @@ export default function ArchivePage() {
   const { isLoading } = useAuthGuard();
   const [records, setRecords] = useState<InferenceRecord[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  
+
   // State for metadata lookup
   const [modelsList, setModelsList] = useState<any[]>([]);
   const [datasetMap, setDatasetMap] = useState<Record<string, string>>({});
-  
+
   const [modelFilter, setModelFilter] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
@@ -107,13 +107,13 @@ export default function ArchivePage() {
 
   const handleBulkRestore = async () => {
     try {
-      const resp = await apiFetch('/api/inferences/archive', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ ids: selectedIds, archived: false }) 
+      const resp = await apiFetch('/api/inferences/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds, archived: false })
       });
       if (!resp.ok) throw new Error('Unarchive failed');
-      
+
       toast.success(`Restored ${selectedIds.length} inferences`);
       setRecords((r) => r.filter((rec) => !selectedIds.includes(rec._id)));
       setSelectedIds([]);
@@ -124,7 +124,7 @@ export default function ArchivePage() {
   };
 
   const handleBulkDelete = async () => {
-    if(!confirm("This will permanently delete the selected records. This cannot be undone.")) return;
+    if (!confirm("This will permanently delete the selected records. This cannot be undone.")) return;
     try {
       for (const id of selectedIds) {
         await apiFetch(`/api/inferences/${id}`, { method: 'DELETE' });
@@ -140,10 +140,10 @@ export default function ArchivePage() {
 
   const handleRestoreSingle = async (id: string) => {
     try {
-      const resp = await apiFetch('/api/inferences/archive', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ ids: [id], archived: false }) 
+      const resp = await apiFetch('/api/inferences/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [id], archived: false })
       });
       if (!resp.ok) throw new Error('Unarchive failed');
       toast.success('Inference restored to active list');
@@ -155,7 +155,7 @@ export default function ArchivePage() {
   };
 
   const handleDeleteSingle = async (id: string) => {
-    if(!confirm("Permanently delete this record?")) return;
+    if (!confirm("Permanently delete this record?")) return;
     try {
       const resp = await apiFetch(`/api/inferences/${id}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error('Delete failed');
@@ -178,9 +178,9 @@ export default function ArchivePage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <DashboardNav />
-      
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
           <div>
@@ -188,8 +188,8 @@ export default function ArchivePage() {
             <p className="mt-1 text-slate-500">Restore items to the main dashboard or permanently delete them.</p>
           </div>
           <div className="mt-4 md:mt-0">
-             <Link 
-              href="/results" 
+            <Link
+              href="/results"
               className="inline-flex items-center text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors"
             >
               ← Back to Active Results
@@ -207,7 +207,7 @@ export default function ArchivePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            
+
             {/* LEFT: Table (Span 3) */}
             <div className="lg:col-span-3">
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -249,7 +249,7 @@ export default function ArchivePage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm font-medium text-slate-700 font-mono">
-                                {record._id.substring(0, 8)}...
+                              {record._id.substring(0, 8)}...
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 font-medium">
@@ -260,10 +260,10 @@ export default function ArchivePage() {
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                              ${record.status === "completed" ? "bg-emerald-100 text-emerald-800" : 
-                                record.status === "failed" ? "bg-rose-100 text-rose-800" : 
-                                "bg-amber-100 text-amber-800"}`}>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                              ${record.status === "completed" ? "bg-emerald-100 text-emerald-800" :
+                                record.status === "failed" ? "bg-rose-100 text-rose-800" :
+                                  "bg-amber-100 text-amber-800"}`}>
                               {record.status.toUpperCase()}
                             </span>
                           </td>
@@ -277,7 +277,7 @@ export default function ArchivePage() {
                               >
                                 {isDownloading === record._id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                               </button>
-                              
+
                               <button
                                 onClick={() => handleRestoreSingle(record._id)}
                                 className="text-slate-400 hover:text-emerald-600 transition-colors p-1"
@@ -305,63 +305,63 @@ export default function ArchivePage() {
 
             {/* RIGHT: Sticky Sidebar (Span 1) */}
             <div className="lg:col-span-1">
-               <div className="sticky top-6 space-y-6">
-                 
-                 {/* Filter */}
-                 <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                    <div className="flex items-center gap-2 mb-4 text-slate-900 font-semibold">
-                      <Filter className="w-4 h-4 text-slate-500" />
-                      <h2>Filter Archive</h2>
+              <div className="sticky top-6 space-y-6">
+
+                {/* Filter */}
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                  <div className="flex items-center gap-2 mb-4 text-slate-900 font-semibold">
+                    <Filter className="w-4 h-4 text-slate-500" />
+                    <h2>Filter Archive</h2>
+                  </div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase">By Model</label>
+                  <select
+                    value={modelFilter ?? ''}
+                    onChange={(e) => setModelFilter(e.target.value || null)}
+                    className="w-full rounded-lg border-slate-200 text-sm focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    <option value="">All models</option>
+                    {modelsList.map((m) => (
+                      <option key={m._id} value={m._id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Bulk Actions */}
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2 text-slate-900 font-semibold">
+                      <CheckSquare className="w-4 h-4 text-slate-500" />
+                      <h2>Bulk Actions</h2>
                     </div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase">By Model</label>
-                    <select 
-                      value={modelFilter ?? ''} 
-                      onChange={(e) => setModelFilter(e.target.value || null)} 
-                      className="w-full rounded-lg border-slate-200 text-sm focus:border-blue-500 focus:ring-blue-500"
+                    {selectedIds.length > 0 && (
+                      <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                        {selectedIds.length}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <button
+                      disabled={selectedIds.length === 0}
+                      onClick={handleBulkRestore}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
                     >
-                      <option value="">All models</option>
-                      {modelsList.map((m) => (
-                        <option key={m._id} value={m._id}>{m.name}</option>
-                      ))}
-                    </select>
-                 </div>
+                      <RefreshCcw className="w-4 h-4" />
+                      Restore Selected
+                    </button>
 
-                 {/* Bulk Actions */}
-                 <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2 text-slate-900 font-semibold">
-                        <CheckSquare className="w-4 h-4 text-slate-500" />
-                        <h2>Bulk Actions</h2>
-                      </div>
-                      {selectedIds.length > 0 && (
-                        <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                          {selectedIds.length}
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <button
-                        disabled={selectedIds.length === 0}
-                        onClick={handleBulkRestore}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
-                      >
-                        <RefreshCcw className="w-4 h-4" />
-                        Restore Selected
-                      </button>
+                    <button
+                      disabled={selectedIds.length === 0}
+                      onClick={handleBulkDelete}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Forever
+                    </button>
+                  </div>
+                </div>
 
-                      <button
-                        disabled={selectedIds.length === 0}
-                        onClick={handleBulkDelete}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Delete Forever
-                      </button>
-                    </div>
-                 </div>
-
-               </div>
+              </div>
             </div>
 
           </div>

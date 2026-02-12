@@ -68,15 +68,19 @@ export default function DashboardNav() {
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between">
           {/* Logo and Brand */}
-          <div className="flex items-center py-2">
-            <div className="flex items-center space-x-2">
-              <Brain className="h-6 w-6 text-cvat-primary" />
-              <span className="text-cvat-text-white font-bold text-xl">IntelliClinix</span>
+
+          <Link href="/">
+            <div className="flex items-center py-2">
+              <div className="flex items-center space-x-2">
+                <Brain className="h-6 w-6 text-cvat-primary" />
+                <span className="text-cvat-text-white font-bold text-xl">IntelliClinix</span>
+              </div>
+              <span className="ml-2 px-2 py-1 bg-cvat-bg-header-light text-xs text-cvat-text-white rounded-md">
+                AI Annotation
+              </span>
             </div>
-            <span className="ml-2 px-2 py-1 bg-cvat-bg-header-light text-xs text-cvat-text-white rounded-md">
-              AI Annotation
-            </span>
-          </div>
+          </Link>
+
 
           {/* Main Navigation */}
           <div className="flex space-x-1">
@@ -89,9 +93,8 @@ export default function DashboardNav() {
               <Link
                 key={href}
                 href={href}
-                className={`cvat-nav-item flex items-center px-3 py-3 text-sm font-medium ${
-                  isActive(href) ? "active" : ""
-                }`}
+                className={`cvat-nav-item flex items-center px-3 py-3 text-sm font-medium ${isActive(href) ? "active" : ""
+                  }`}
               >
                 <Icon className="h-4 w-4 mr-2" />
                 {label}
@@ -113,14 +116,14 @@ export default function DashboardNav() {
             </a>
             <div className="h-5 border-r border-cvat-border-dark"></div>
             <div className="relative" ref={userMenuRef}>
-              <button 
+              <button
                 className="p-1.5 rounded-full text-cvat-text-white/70 hover:text-cvat-text-white hover:bg-cvat-bg-header-light transition-colors duration-100"
                 title="User Profile"
                 onClick={() => setShowUserMenu(!showUserMenu)}
               >
                 <CircleUser className="h-4 w-4" />
               </button>
-              
+
               {/* User Dropdown Menu */}
               {showUserMenu && (
                 <div className="absolute right-0 top-full mt-2 w-48 bg-cvat-bg-secondary border border-cvat-border rounded-lg shadow-cvat z-50">
@@ -129,18 +132,17 @@ export default function DashboardNav() {
                       <p className="text-sm font-medium text-cvat-text-primary">
                         {typeof window !== 'undefined' ? localStorage.getItem('username') || 'User' : 'User'}
                       </p>
-                      <p className="text-xs text-cvat-text-secondary">Medical Image Annotation</p>
                     </div>
-                    <button className="w-full px-4 py-2 text-left text-sm text-cvat-text-primary hover:bg-cvat-bg-tertiary flex items-center">
+                    {/* <button className="w-full px-4 py-2 text-left text-sm text-cvat-text-primary hover:bg-cvat-bg-tertiary flex items-center">
                       <User className="h-4 w-4 mr-2" />
                       Profile
-                    </button>
-                    <button className="w-full px-4 py-2 text-left text-sm text-cvat-text-primary hover:bg-cvat-bg-tertiary flex items-center">
+                    </button> */}
+                    {/* <button className="w-full px-4 py-2 text-left text-sm text-cvat-text-primary hover:bg-cvat-bg-tertiary flex items-center">
                       <Settings className="h-4 w-4 mr-2" />
                       Settings
-                    </button>
+                    </button> */}
                     <div className="border-t border-cvat-border-light mt-1 pt-1">
-                      <button 
+                      <button
                         onClick={handleLogout}
                         className="w-full px-4 py-2 text-left text-sm text-cvat-error hover:bg-cvat-bg-tertiary flex items-center"
                       >

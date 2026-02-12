@@ -188,17 +188,25 @@ export default function ResultsPage() {
           </div>
         </div>
 
-        {records.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-            <div className="mx-auto h-12 w-12 text-slate-400 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-              <Filter className="h-6 w-6" />
-            </div>
-            <h3 className="text-lg font-medium text-slate-900">No results found</h3>
-            <p className="mt-1 text-slate-500">No inference jobs match your current criteria.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <div className="lg:col-span-3">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <div className="lg:col-span-3">
+            {records.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
+                <div className="mx-auto h-12 w-12 text-slate-400 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                  <Filter className="h-6 w-6" />
+                </div>
+                <h3 className="text-lg font-medium text-slate-900">No results found</h3>
+                <p className="mt-1 text-slate-500">No inference jobs match your current criteria.</p>
+                {modelFilter && (
+                  <button
+                    onClick={() => setModelFilter(null)}
+                    className="mt-4 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            ) : (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-slate-200">
@@ -293,68 +301,68 @@ export default function ResultsPage() {
                   </table>
                 </div>
               </div>
-            </div>
-
-            <div className="lg:col-span-1">
-              <div className="sticky top-6 space-y-6">
-
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                  <div className="flex items-center gap-2 mb-4 text-slate-900 font-semibold">
-                    <Filter className="w-4 h-4 text-slate-500" />
-                    <h2>Filter Results</h2>
-                  </div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase">By Model</label>
-                  <select
-                    value={modelFilter ?? ''}
-                    onChange={(e) => setModelFilter(e.target.value || null)}
-                    className="w-full rounded-lg border-slate-200 text-sm focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    <option value="">Show All Models</option>
-                    {modelsList.map((m) => (
-                      <option key={m._id} value={m._id}>{m.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 text-slate-900 font-semibold">
-                      <CheckSquare className="w-4 h-4 text-slate-500" />
-                      <h2>Bulk Actions</h2>
-                    </div>
-                    {selectedIds.length > 0 && (
-                      <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                        {selectedIds.length}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-3">
-                    <button
-                      disabled={selectedIds.length === 0}
-                      onClick={handleBulkArchive}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    >
-                      <Archive className="w-4 h-4" />
-                      Archive Selected
-                    </button>
-
-                    <button
-                      disabled={selectedIds.length === 0}
-                      onClick={handleBulkDelete}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete Selected
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
+            )}
           </div>
-        )}
+
+          <div className="lg:col-span-1">
+            <div className="sticky top-6 space-y-6">
+
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <div className="flex items-center gap-2 mb-4 text-slate-900 font-semibold">
+                  <Filter className="w-4 h-4 text-slate-500" />
+                  <h2>Filter Results</h2>
+                </div>
+                <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase">By Model</label>
+                <select
+                  value={modelFilter ?? ''}
+                  onChange={(e) => setModelFilter(e.target.value || null)}
+                  className="w-full rounded-lg border-slate-200 text-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  <option value="">Show All Models</option>
+                  {modelsList.map((m) => (
+                    <option key={m._id} value={m._id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2 text-slate-900 font-semibold">
+                    <CheckSquare className="w-4 h-4 text-slate-500" />
+                    <h2>Bulk Actions</h2>
+                  </div>
+                  {selectedIds.length > 0 && (
+                    <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                      {selectedIds.length}
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    disabled={selectedIds.length === 0}
+                    onClick={handleBulkArchive}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    <Archive className="w-4 h-4" />
+                    Archive Selected
+                  </button>
+
+                  <button
+                    disabled={selectedIds.length === 0}
+                    onClick={handleBulkDelete}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Selected
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
       </main>
     </div>
   );
