@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { Loader2 } from "lucide-react";
-import DashboardNav from "@/components/DashboardNav";
 import { apiFetch } from "@/lib/api";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 
@@ -101,7 +100,6 @@ export default function InferencePage() {
 
   return (
     <div className="min-h-screen bg-cvat-bg-primary">
-      <DashboardNav />
       <div className="max-w-3xl mx-auto px-4 py-10">
         <div className="cvat-card p-6">
           <h1 className="text-2xl font-semibold text-cvat-text-primary mb-6">

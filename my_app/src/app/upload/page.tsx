@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Loader2, UploadCloud } from "lucide-react";
-import DashboardNav from "@/components/DashboardNav";
 import { apiFetch } from "@/lib/api";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 import { toast } from "react-hot-toast";
@@ -44,7 +43,7 @@ export default function UploadPage() {
     try {
       const formData = new FormData();
       formData.append("name", datasetName.trim());
-        // We only create datasets from this page; running inference is handled separately.
+      // We only create datasets from this page; running inference is handled separately.
       selectedFiles.forEach((file) => {
         formData.append("files", file);
       });
@@ -82,7 +81,6 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen bg-cvat-bg-primary">
-      <DashboardNav />
       <div className="max-w-3xl mx-auto px-4 py-10">
         <div className="cvat-card p-6">
           <div className="flex items-center gap-3 mb-6">

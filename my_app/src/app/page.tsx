@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Upload, Brain, ListChecks, ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
-import DashboardNav from "@/components/DashboardNav";
 import { apiFetch } from "@/lib/api";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 
@@ -64,7 +63,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-cvat-bg-primary">
-      <DashboardNav />
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-cvat-text-primary">Welcome back</h1>
@@ -163,13 +161,12 @@ export default function Home() {
                     </p>
                   </div>
                   <span
-                    className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                      inference.status === "completed"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : inference.status === "failed"
+                    className={`text-xs font-semibold px-3 py-1 rounded-full ${inference.status === "completed"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : inference.status === "failed"
                         ? "bg-rose-100 text-rose-700"
                         : "bg-amber-100 text-amber-700"
-                    }`}
+                      }`}
                   >
                     {inference.status.toUpperCase()}
                   </span>

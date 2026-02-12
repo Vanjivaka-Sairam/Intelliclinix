@@ -11,7 +11,6 @@ import {
   Filter,
   CheckSquare
 } from "lucide-react";
-import DashboardNav from "@/components/DashboardNav";
 import { apiFetch } from "@/lib/api";
 import { toast } from "react-hot-toast";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
@@ -177,8 +176,6 @@ export default function ArchivePage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <DashboardNav />
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
         {/* Header */}
@@ -197,19 +194,19 @@ export default function ArchivePage() {
           </div>
         </div>
 
-        {records.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-            <div className="mx-auto h-12 w-12 text-slate-400 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-              <Archive className="h-6 w-6" />
-            </div>
-            <h3 className="text-lg font-medium text-slate-900">Archive is empty</h3>
-            <p className="mt-1 text-slate-500">No archived inferences found.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
 
-            {/* LEFT: Table (Span 3) */}
-            <div className="lg:col-span-3">
+          {/* LEFT: Results Column (Span 3) */}
+          <div className="lg:col-span-3">
+            {records.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
+                <div className="mx-auto h-12 w-12 text-slate-400 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                  <Archive className="h-6 w-6" />
+                </div>
+                <h3 className="text-lg font-medium text-slate-900">Archive is empty</h3>
+                <p className="mt-1 text-slate-500">No archived inferences found matching your criteria.</p>
+              </div>
+            ) : (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-slate-200">
@@ -261,7 +258,7 @@ export default function ArchivePage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                              ${record.status === "completed" ? "bg-emerald-100 text-emerald-800" :
+                                ${record.status === "completed" ? "bg-emerald-100 text-emerald-800" :
                                 record.status === "failed" ? "bg-rose-100 text-rose-800" :
                                   "bg-amber-100 text-amber-800"}`}>
                               {record.status.toUpperCase()}
@@ -301,71 +298,71 @@ export default function ArchivePage() {
                   </table>
                 </div>
               </div>
-            </div>
-
-            {/* RIGHT: Sticky Sidebar (Span 1) */}
-            <div className="lg:col-span-1">
-              <div className="sticky top-6 space-y-6">
-
-                {/* Filter */}
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                  <div className="flex items-center gap-2 mb-4 text-slate-900 font-semibold">
-                    <Filter className="w-4 h-4 text-slate-500" />
-                    <h2>Filter Archive</h2>
-                  </div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase">By Model</label>
-                  <select
-                    value={modelFilter ?? ''}
-                    onChange={(e) => setModelFilter(e.target.value || null)}
-                    className="w-full rounded-lg border-slate-200 text-sm focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    <option value="">All models</option>
-                    {modelsList.map((m) => (
-                      <option key={m._id} value={m._id}>{m.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Bulk Actions */}
-                <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 text-slate-900 font-semibold">
-                      <CheckSquare className="w-4 h-4 text-slate-500" />
-                      <h2>Bulk Actions</h2>
-                    </div>
-                    {selectedIds.length > 0 && (
-                      <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                        {selectedIds.length}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-3">
-                    <button
-                      disabled={selectedIds.length === 0}
-                      onClick={handleBulkRestore}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
-                    >
-                      <RefreshCcw className="w-4 h-4" />
-                      Restore Selected
-                    </button>
-
-                    <button
-                      disabled={selectedIds.length === 0}
-                      onClick={handleBulkDelete}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete Forever
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
+            )}
           </div>
-        )}
+
+          {/* RIGHT: Sticky Sidebar (Span 1) */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-6 space-y-6">
+
+              {/* Filter */}
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <div className="flex items-center gap-2 mb-4 text-slate-900 font-semibold">
+                  <Filter className="w-4 h-4 text-slate-500" />
+                  <h2>Filter Archive</h2>
+                </div>
+                <label className="block text-xs font-medium text-slate-500 mb-1.5 uppercase">By Model</label>
+                <select
+                  value={modelFilter ?? ''}
+                  onChange={(e) => setModelFilter(e.target.value || null)}
+                  className="w-full rounded-lg border-slate-200 text-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  <option value="">All models</option>
+                  {modelsList.map((m) => (
+                    <option key={m._id} value={m._id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Bulk Actions */}
+              <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2 text-slate-900 font-semibold">
+                    <CheckSquare className="w-4 h-4 text-slate-500" />
+                    <h2>Bulk Actions</h2>
+                  </div>
+                  {selectedIds.length > 0 && (
+                    <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                      {selectedIds.length}
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    disabled={selectedIds.length === 0}
+                    onClick={handleBulkRestore}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+                  >
+                    <RefreshCcw className="w-4 h-4" />
+                    Restore Selected
+                  </button>
+
+                  <button
+                    disabled={selectedIds.length === 0}
+                    onClick={handleBulkDelete}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Forever
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
       </main>
     </div>
   );
