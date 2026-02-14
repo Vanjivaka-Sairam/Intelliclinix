@@ -10,7 +10,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className="min-h-screen bg-cvat-bg-primary">
             {!isAuthPage && <DashboardNav />}
-            <main className={!isAuthPage ? "" : "w-full h-full"}>
+            <main className={!isAuthPage ? "pt-16" : "w-full h-full"}>
                 {children}
             </main>
         </div>

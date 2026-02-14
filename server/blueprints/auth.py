@@ -6,7 +6,34 @@ from schema.schemas import UserSignup, UserLogin
 from utils.security import hash_password, verify_password, create_jwt_token, jwt_required
 from services.cvat_api import create_cvat_user, cvat_login, cvat_logout
 from bson.objectid import ObjectId
+import threading
 auth_bp = Blueprint("auth", __name__)
+
+
+def cvat_login_background(username, password):
+    """Run CVAT login in background thread to avoid blocking auth response"""
+    try:
+        cvat_login_data = cvat_login(
+            host=None,
+            username=username,
+            password=password,
+        )
+        if "error" in cvat_login_data:
+            print(f"Warning: CVAT login failed for {username}: {cvat_login_data['error']}")
+    except Exception as e:
+        print(f"Non-critical: CVAT login check failed: {e}")
+
+
+def cvat_logout_background():
+    """Run CVAT logout in background thread to avoid blocking auth response"""
+    try:
+        cvat_logout_resp = cvat_logout()
+        if isinstance(cvat_logout_resp, dict) and cvat_logout_resp.get("error"):
+            print(f"Warning: CVAT logout failed: {cvat_logout_resp['error']}")
+        else:
+            print("CVAT logout successful")
+    except Exception as e:
+        print(f"Non-critical: CVAT logout failed: {e}")
 
 
 @auth_bp.route("/signup", methods=["POST"])
@@ -75,18 +102,32 @@ def login():
 
     token = create_jwt_token(identity=str(user["_id"]))
 
-    try:
-        cvat_login_data = cvat_login(
-            host=None,
-            username=login_data.username,
-            password=login_data.password,
-        )
-        if "error" in cvat_login_data:
-            print(f"Warning: CVAT login failed for {login_data.username}: {cvat_login_data['error']}")
-    except Exception as e:
-        print(f"Non-critical: CVAT login check failed: {e}")
+    # Prepare user data for response (same format as /me endpoint)
+    user_data = {
+        "_id": str(user["_id"]),
+        "username": user["username"],
+        "email": user["email"],
+        "first_name": user["first_name"],
+        "last_name": user["last_name"],
+        "role": user.get("role", "researcher"),
+    }
+    
+    created_at = user.get("created_at")
+    if isinstance(created_at, datetime):
+        user_data["created_at"] = created_at.isoformat()
 
-    return jsonify({"access_token": token}), 200
+    last_login = user.get("last_login")
+    if isinstance(last_login, datetime):
+        user_data["last_login"] = last_login.isoformat()
+
+    # Run CVAT login in background to avoid blocking the response
+    threading.Thread(
+        target=cvat_login_background,
+        args=(login_data.username, login_data.password),
+        daemon=True
+    ).start()
+
+    return jsonify({"access_token": token, "user": user_data}), 200
 
 
 @auth_bp.route("/logout", methods=["POST"])
@@ -100,23 +141,15 @@ def logout(current_user_id):
     user = db.users.find_one({"_id": user_id})
     if not user:
         return jsonify({"error": "User not found"}), 404
-    app_logout_success = True
-    cvat_logout_success = False
-    cvat_error = None
     
-    try:
-        cvat_logout_resp = cvat_logout()
-        if isinstance(cvat_logout_resp, dict) and cvat_logout_resp.get("error"):
-            cvat_error = cvat_logout_resp["error"]
-        else:
-            cvat_logout_success = True
-    except Exception as e:
-        cvat_error = str(e)
+    # Run CVAT logout in background to avoid blocking the response
+    threading.Thread(
+        target=cvat_logout_background,
+        daemon=True
+    ).start()
 
-    ret = {"logout": app_logout_success, "cvat_logout": cvat_logout_success}
-    if cvat_error:
-        ret["cvat_error"] = cvat_error
-    return jsonify(ret), 200
+    # Return success immediately - CVAT logout happens in background
+    return jsonify({"logout": True, "message": "Logged out successfully"}), 200
 
 
 @auth_bp.route("/me", methods=["GET"])

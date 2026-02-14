@@ -9,7 +9,6 @@ import {
     Maximize2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
     Layers, Layout, Table
 } from "lucide-react";
-import DashboardNav from "@/components/DashboardNav";
 import { apiFetch } from "@/lib/api";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 import CanvasViewer, { CanvasViewerRef } from "@/components/ImageViewer/CanvasViewer";
@@ -337,7 +336,7 @@ export default function InferenceDetailPage() {
 
     if (isLoading || !inference) {
         return (
-            <div className="flex h-screen items-center justify-center bg-cvat-bg-primary text-cvat-text-secondary">
+            <div className="flex min-h-screen items-center justify-center bg-cvat-bg-primary text-cvat-text-secondary">
                 <Loader2 className="h-8 w-8 animate-spin" />
             </div>
         );
@@ -347,10 +346,7 @@ export default function InferenceDetailPage() {
     const currentOverlayUrl = activeLayer === "none" ? undefined : activeImageState.layers[activeLayer];
 
     return (
-        <div className="flex flex-col h-screen bg-cvat-bg-primary overflow-hidden">
-            {/* Main Navigation */}
-            <DashboardNav />
-
+        <div className="flex flex-col min-h-screen bg-cvat-bg-primary overflow-hidden">
             {/* Top Bar / Sub-header */}
             <div className="h-12 border-b border-cvat-border bg-cvat-bg-secondary flex items-center justify-between px-4 shrink-0">
                 <div className="flex items-center gap-4">

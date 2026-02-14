@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { apiFetch, setStoredToken } from "@/lib/api"
+import { setStoredUser } from "@/hooks/use-auth-guard"
 
 export default function SignupPage() {
   const [username, setUsername] = useState("")
@@ -100,6 +101,12 @@ export default function SignupPage() {
 
       setStoredToken(loginData.access_token)
       localStorage.setItem("username", username)
+      
+      // Store user data to avoid immediate /api/auth/me call
+      if (loginData.user) {
+        setStoredUser(loginData.user)
+      }
+      
       router.push("/")
     } catch (error) {
       setErrorMessage("Failed to connect to the server. Please try again.")

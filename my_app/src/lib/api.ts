@@ -30,6 +30,7 @@ export const clearStoredAuth = () => {
   localStorage.removeItem("token");
   localStorage.removeItem("username");
   localStorage.removeItem("session");
+  localStorage.removeItem("user_data");
 };
 
 export async function apiFetch(

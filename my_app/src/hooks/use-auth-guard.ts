@@ -6,7 +6,29 @@ type CurrentUser = {
   _id?: string;
   username?: string;
   email?: string;
+  first_name?: string;
+  last_name?: string;
+  role?: string;
+  created_at?: string;
+  last_login?: string;
 } | null;
+
+const USER_DATA_KEY = "user_data";
+
+export const getStoredUser = (): CurrentUser => {
+  if (typeof window === "undefined") return null;
+  const data = localStorage.getItem(USER_DATA_KEY);
+  return data ? JSON.parse(data) : null;
+};
+
+export const setStoredUser = (user: CurrentUser) => {
+  if (typeof window === "undefined") return;
+  if (user) {
+    localStorage.setItem(USER_DATA_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(USER_DATA_KEY);
+  }
+};
 
 export function useAuthGuard() {
   const router = useRouter();
@@ -26,23 +48,18 @@ export function useAuthGuard() {
       try {
         const response = await apiFetch("/api/auth/me");
         if (!response.ok) {
-          if (response.status === 404) {
-            if (isMounted) {
-              setUser(null);
-              setIsLoading(false);
-            }
-            return;
-          }
           throw new Error("Unauthorized");
         }
         const data = await response.json();
         if (isMounted) {
           setUser(data.user ?? null);
+          setStoredUser(data.user ?? null);
           setIsLoading(false);
         }
       } catch {
         if (isMounted) {
           clearStoredAuth();
+          setStoredUser(null);
           router.replace("/login");
         }
       }
