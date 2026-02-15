@@ -25,6 +25,23 @@ export interface OverlayData {
     opacity?: number;
 }
 
+export interface Nucleus {
+    id: number;
+    polygon: number[][]; // [[x,y], [x,y], ...]
+    stats: {
+        Her2: number;
+        Chr17: number;
+        Fusion: number;
+    };
+}
+
+export interface NucleiData {
+    image_id: string;
+    nuclei: Nucleus[];
+}
+
+export type NucleusHoverHandler = (nucleus: Nucleus | null, x: number, y: number) => void;
+
 // The public API for our Viewer
 export interface IViewer {
     html(): HTMLDivElement;
@@ -34,6 +51,8 @@ export interface IViewer {
     rotate(angle: number): void;
     setZoom(scale: number): void;
     setOverlay(overlay: OverlayData | null): Promise<void>;
+    setNucleiData(data: NucleiData | null): void; // New
+    onHover(handler: NucleusHoverHandler): void; // New
     configure(config: CanvasConfiguration): void;
     destroy(): void;
 

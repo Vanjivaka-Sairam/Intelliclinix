@@ -273,6 +273,70 @@ def make_compare_figure(img_name: str, orig_rgb: np.ndarray, overlay_bgr_draw: n
 
 
 
+def generate_interactive_data(inst_mask: np.ndarray, detections_arg: List[dict], image_id: str) -> dict:
+    """
+    Generates a JSON structure for the interactive frontend viewer.
+    :param inst_mask: 2D integer array (Cellpose output)
+    :param detections_arg: List of dicts representing ALL detections for this image (from all_rows)
+    :param image_id: String identifier (filename or ID)
+    """
+    output_data = {"image_id": image_id, "nuclei": []}
+    
+    # Get all unique Nucleus IDs (skip 0=background)
+    ids = np.unique(inst_mask)
+    ids = ids[ids != 0]
+    
+    for nid in ids:
+        # Create binary mask for current nucleus
+        # Optimization: Isolate ROI to speed up findContours
+        rows, cols = np.where(inst_mask == nid)
+        if len(rows) == 0: continue
+        
+        y1, x1 = np.min(rows), np.min(cols)
+        y2, x2 = np.max(rows), np.max(cols)
+        
+        # Pad ROI to prevent contour clipping
+        roi = inst_mask[y1:y2+1, x1:x2+1]
+        binary_roi = (roi == nid).astype(np.uint8)
+        
+        # Find contours in ROI coordinates
+        contours, _ = cv2.findContours(binary_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if contours:
+            # Simplify contour
+            cnt = contours[0]
+            epsilon = 0.01 * cv2.arcLength(cnt, True) # 1% error allowed
+            approx = cv2.approxPolyDP(cnt, epsilon, True)
+            
+            # Offset contours back to global image coordinates
+            # approx shape is (N, 1, 2) -> we want (N, 2)
+            global_contour = approx.reshape(-1, 2) + [x1, y1]
+            
+            # Filter detections for this nucleus
+            # detections_arg is a list of dicts. We filter by 'nucleus_id'
+            n_dets = [d for d in detections_arg if d['nucleus_id'] == nid]
+            
+            # Count stats
+            her2_count = sum(1 for d in n_dets if d['cls_name_model'] == 'Her2')
+            chr17_count = sum(1 for d in n_dets if d['cls_name_model'] == 'Chr17')
+            fusion_count = sum(1 for d in n_dets if 'Fusion' in d['cls_name_model'])
+            
+            nucleus_obj = {
+                "id": int(nid),
+                "polygon": global_contour.tolist(), # [[x,y], [x,y]...]
+                "stats": {
+                    "Her2": her2_count,
+                    "Chr17": chr17_count,
+                    "Fusion": fusion_count
+                },
+                # We can optionally include detailed markers if needed for the tooltip
+                # "markers": [...] 
+            }
+            output_data["nuclei"].append(nucleus_obj)
+            
+    return output_data
+
+
 # -------------------- MAIN RUNNER CLASS --------------------
 
 
@@ -337,6 +401,9 @@ class DDishRunner(ModelRunner):
              rgb = np.array(pil_img)
              img_name = file_ref["filename"]
              img_stem = Path(img_name).stem
+             
+             # Keep track of detections for this specific image to build the JSON
+             current_image_detections = []
 
              # --- Inference Pipeline ---
              inst_mask = cellpose_segment(cp_model, rgb)
@@ -383,8 +450,8 @@ class DDishRunner(ModelRunner):
 
                             draw_marker_hollow_circle(overlay_bgr, box_adj, color_bgr=color)
                             counts_by_pretty[pretty] = counts_by_pretty.get(pretty, 0) + 1
-
-                            all_rows.append({
+                            
+                            row_data = {
                                 "image": img_name,
                                 "nucleus_id": nid,
                                 "cls_id": cls_id,
@@ -392,10 +459,22 @@ class DDishRunner(ModelRunner):
                                 "conf": f"{float(dets_conf[j]):.4f}",
                                 "x1": f"{box_adj[0]:.1f}", "y1": f"{box_adj[1]:.1f}",
                                 "x2": f"{box_adj[2]:.1f}", "y2": f"{box_adj[3]:.1f}",
-                            })
+                            }
+                            all_rows.append(row_data)
+                            current_image_detections.append(row_data)
 
              # --- Artifact Generation ---
              
+             # 0. Interactive Nuclei JSON (New)
+             import json
+             nuclei_data = generate_interactive_data(inst_mask, current_image_detections, img_name)
+             nuclei_json_bytes = json.dumps(nuclei_data).encode('utf-8')
+             nuclei_json_id = save_bytes_to_gridfs(
+                 nuclei_json_bytes,
+                 filename=f"{img_stem}_nuclei.json",
+                 metadata={"inference_id": str(inference_id), "source_image_id": str(gridfs_id), "type": "nuclei_json"}
+             )
+
              # 1. Stitched Overlay
              overlay_enc = cv2.imencode(".png", overlay_bgr)[1].tobytes()
              overlay_id = save_bytes_to_gridfs(
@@ -465,6 +544,11 @@ class DDishRunner(ModelRunner):
                  "source_filename": img_name,
                  "source_image_gridfs_id": str(gridfs_id),
                  "artifacts": [
+                     {
+                         "kind": "nuclei_json",
+                         "gridfs_id": str(nuclei_json_id),
+                         "filename": f"{img_stem}_nuclei.json",
+                     },
                      {
                          "kind": "overlay_stitched",
                          "gridfs_id": str(overlay_id),

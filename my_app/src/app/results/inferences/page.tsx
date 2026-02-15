@@ -47,6 +47,7 @@ type ActiveImageState = {
         stitchedOverlay?: string;
     };
     comparisonUrl?: string;
+    nucleiUrl?: string;
 };
 
 export default function InferenceDetailPage() {
@@ -176,19 +177,22 @@ export default function InferenceDetailPage() {
             const compareArt = result.artifacts?.find(a => a.kind === "figure_compare");
             const classMaskArt = result.artifacts?.find(a => a.kind === "class_mask"); // or use result.class_mask_id
             const instMaskArt = result.artifacts?.find(a => a.kind === "instance_mask");
+            const nucleiArt = result.artifacts?.find(a => a.kind === "nuclei_json");
 
             // Prioritize artifacts, fallback to legacy IDs
             const stitchedId = stitchedArt?.gridfs_id;
             const compareId = compareArt?.gridfs_id;
             const classId = classMaskArt?.gridfs_id || result.class_mask_id;
             const instId = instMaskArt?.gridfs_id || result.instance_mask_id;
+            const nucleiId = nucleiArt?.gridfs_id;
 
-            const [src, stitched, compare, cls, inst] = await Promise.all([
+            const [src, stitched, compare, cls, inst, nuclei] = await Promise.all([
                 fetchFileUrl(result.source_image_gridfs_id!),
                 stitchedId ? fetchFileUrl(stitchedId) : undefined,
                 compareId ? fetchFileUrl(compareId) : undefined,
                 classId ? fetchFileUrl(classId) : undefined,
                 instId ? fetchFileUrl(instId) : undefined,
+                nucleiId ? fetchFileUrl(nucleiId) : undefined,
             ]);
 
             if (isMounted) {
@@ -199,7 +203,8 @@ export default function InferenceDetailPage() {
                         classMask: cls,
                         instanceMask: inst
                     },
-                    comparisonUrl: compare
+                    comparisonUrl: compare,
+                    nucleiUrl: nuclei
                 });
 
                 // Auto-select best layer
@@ -453,6 +458,7 @@ export default function InferenceDetailPage() {
                             ref={viewerRef}
                             sourceUrl={activeImageState.sourceUrl}
                             maskUrl={currentOverlayUrl}
+                            nucleiUrl={activeImageState.nucleiUrl}
                             overlayOpacity={overlayOpacity}
                             smoothImage={smoothImage}
                             className="flex-1 w-full h-full border-none rounded-none"

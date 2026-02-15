@@ -76,4 +76,17 @@ export class ViewerModel {
         this.x += dx;
         this.y += dy;
     }
+
+    /**
+     * Converts screen/canvas coordinates to image coordinates.
+     * Useful for hit detection.
+     */
+    public canvasToImage(canvasX: number, canvasY: number): { x: number, y: number } {
+        // canvasX = imgX * scale + this.x
+        // imgX = (canvasX - this.x) / scale
+        return {
+            x: (canvasX - this.x) / this.scale,
+            y: (canvasY - this.y) / this.scale
+        };
+    }
 }
