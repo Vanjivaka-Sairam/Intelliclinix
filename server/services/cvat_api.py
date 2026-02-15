@@ -126,9 +126,3 @@ def cvat_logout():
             print(f"Unexpected error during logout: {e}")
             return {"error": str(e)}
 
-
-
-
-# NOTE: The task upload / annotation functions were moved to
-# server.services.cellpose_cvat_service.py to separate user handling from
-# Cellpose/CVAT dataset and annotation upload logic.
