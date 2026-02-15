@@ -55,11 +55,10 @@ MAX_AR            = 6.0
 MAX_AREA_FRAC     = 0.40       
 
 # -------------------- Label & color config --------------------
-# Map class IDs to names (must match your YOLO training label order!!!)
 CLASS_NAMES: Dict[int, str] = {
     0: "HER2_Cluster3",
     1: "HER2_Cluster6",
-    2: "HER2_Cluster12",
+    # 2: "HER2_Cluster12",
     3: "Fusion(Her2+Chr17)",
     4: "Chr17",
     5: "Her2",
@@ -274,20 +273,19 @@ def make_compare_figure(img_name: str, orig_rgb: np.ndarray, overlay_bgr_draw: n
 
 
 def generate_interactive_data(inst_mask: np.ndarray, detections_arg: List[dict], image_id: str) -> dict:
-    """
-    Generates a JSON structure for the interactive frontend viewer.
-    :param inst_mask: 2D integer array (Cellpose output)
-    :param detections_arg: List of dicts representing ALL detections for this image (from all_rows)
-    :param image_id: String identifier (filename or ID)
-    """
     output_data = {"image_id": image_id, "nuclei": []}
     
-    # Get all unique Nucleus IDs (skip 0=background)
+    # 1. Pre-group detections by nucleus_id to avoid O(N^2) complexity
+    from collections import defaultdict
+    detections_by_nucleus = defaultdict(list)
+    for d in detections_arg:
+        detections_by_nucleus[d.get('nucleus_id')].append(d)
+    
+    # get all unique Nucleus IDs (skip 0=background)
     ids = np.unique(inst_mask)
     ids = ids[ids != 0]
     
     for nid in ids:
-        # Create binary mask for current nucleus
         # Optimization: Isolate ROI to speed up findContours
         rows, cols = np.where(inst_mask == nid)
         if len(rows) == 0: continue
@@ -303,34 +301,31 @@ def generate_interactive_data(inst_mask: np.ndarray, detections_arg: List[dict],
         contours, _ = cv2.findContours(binary_roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         if contours:
-            # Simplify contour
-            cnt = contours[0]
-            epsilon = 0.01 * cv2.arcLength(cnt, True) # 1% error allowed
+            # Simplify contour (use the largest one if multiple fragments exist)
+            cnt = max(contours, key=cv2.contourArea)
+            epsilon = 0.01 * cv2.arcLength(cnt, True)
             approx = cv2.approxPolyDP(cnt, epsilon, True)
             
             # Offset contours back to global image coordinates
-            # approx shape is (N, 1, 2) -> we want (N, 2)
-            global_contour = approx.reshape(-1, 2) + [x1, y1]
+            global_contour = (approx.reshape(-1, 2) + [x1, y1]).tolist()
             
-            # Filter detections for this nucleus
-            # detections_arg is a list of dicts. We filter by 'nucleus_id'
-            n_dets = [d for d in detections_arg if d['nucleus_id'] == nid]
+            # 2. Get the pre-filtered detections for this specific nucleus
+            n_dets = detections_by_nucleus.get(nid, [])
             
-            # Count stats
-            her2_count = sum(1 for d in n_dets if d['cls_name_model'] == 'Her2')
-            chr17_count = sum(1 for d in n_dets if d['cls_name_model'] == 'Chr17')
-            fusion_count = sum(1 for d in n_dets if 'Fusion' in d['cls_name_model'])
+            # 3. Count stats with corrected string matching
+            # Matches keys used in your CLASS_NAMES: Her2, Chr17, Fusion, Cluster3, Cluster6
+            stats = {
+                "Her2": sum(1 for d in n_dets if d['cls_name_model'] == 'Her2'),
+                "Chr17": sum(1 for d in n_dets if d['cls_name_model'] == 'Chr17'),
+                "Fusion": sum(1 for d in n_dets if 'Fusion' in d['cls_name_model']),
+                "Cluster3": sum(1 for d in n_dets if 'Cluster3' in d['cls_name_model']),
+                "Cluster6": sum(1 for d in n_dets if 'Cluster6' in d['cls_name_model'])
+            }
             
             nucleus_obj = {
                 "id": int(nid),
-                "polygon": global_contour.tolist(), # [[x,y], [x,y]...]
-                "stats": {
-                    "Her2": her2_count,
-                    "Chr17": chr17_count,
-                    "Fusion": fusion_count
-                },
-                # We can optionally include detailed markers if needed for the tooltip
-                # "markers": [...] 
+                "polygon": global_contour, 
+                "stats": stats
             }
             output_data["nuclei"].append(nucleus_obj)
             
