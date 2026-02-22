@@ -101,7 +101,7 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen bg-cvat-bg-primary">
-      <div className="max-w-3xl mx-auto px-4 py-10">
+      <div className="max-w-5xl mx-auto px-4 py-10">
         <div className="cvat-card p-6">
           <div className="flex items-center gap-3 mb-6">
             <UploadCloud className="h-8 w-8 text-cvat-primary" />

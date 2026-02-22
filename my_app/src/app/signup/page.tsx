@@ -95,18 +95,23 @@ export default function SignupPage() {
       })
       const loginData = await loginResponse.json()
       if (!loginResponse.ok || !loginData.access_token) {
-        setErrorMessage(loginData.error || "Account created but automatic login failed.")
+        // Account was created; auto-login failed. Send to /login with a message.
+        toast({
+          title: "Account created!",
+          description: "Please log in with your new credentials.",
+        })
+        router.push("/login")
         return
       }
 
       setStoredToken(loginData.access_token)
       localStorage.setItem("username", username)
-      
+
       // Store user data to avoid immediate /api/auth/me call
       if (loginData.user) {
         setStoredUser(loginData.user)
       }
-      
+
       router.push("/")
     } catch (error) {
       setErrorMessage("Failed to connect to the server. Please try again.")

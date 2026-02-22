@@ -14,13 +14,20 @@ import os
 def create_app(config_name = 'default'):
     app = Flask(__name__)
     app.config.from_object(config[config_name])
-    frontend_origin = app.config.get(
+
+    # Support multiple origins as a comma-separated env var
+    # e.g. FRONTEND_ORIGIN=http://localhost:3000,http://192.168.1.5:3000
+    raw_origin = app.config.get(
         "FRONTEND_ORIGIN",
         os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
     )
+    allowed_origins = [o.strip() for o in raw_origin.split(",") if o.strip()]
+    if len(allowed_origins) == 1:
+        allowed_origins = allowed_origins[0]   # flask-cors prefers a string for single origins
+
     CORS(
         app,
-        resources={r"/*": {"origins": frontend_origin}},
+        resources={r"/*": {"origins": allowed_origins}},
         supports_credentials=True
     )
     init_db(app)

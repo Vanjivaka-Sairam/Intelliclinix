@@ -3,7 +3,7 @@ from pydantic import ValidationError
 from datetime import datetime
 from db import get_db
 from schema.schemas import UserSignup, UserLogin
-from utils.security import hash_password, verify_password, create_jwt_token, jwt_required
+from utils.security import hash_password, verify_password, create_jwt_token, decode_jwt_token, jwt_required
 from services.cvat_api import create_cvat_user, cvat_login, cvat_logout
 from bson.objectid import ObjectId
 import threading
@@ -128,6 +128,49 @@ def login():
     # ).start()
 
     return jsonify({"access_token": token, "user": user_data}), 200
+
+
+@auth_bp.route("/refresh", methods=["POST"])
+def refresh_token():
+    """Issue a new JWT if the current one is valid or expired within the last hour."""
+    token = None
+    auth_header = request.headers.get("Authorization", "")
+    parts = auth_header.split()
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        token = parts[1]
+
+    if not token:
+        return jsonify({"error": "No token provided"}), 401
+
+    import jwt as pyjwt
+    try:
+        # First try normal decode
+        payload = decode_jwt_token(token)
+    except pyjwt.ExpiredSignatureError:
+        # Allow a 1-hour grace window after expiry for seamless refresh
+        try:
+            payload = pyjwt.decode(
+                token,
+                current_app.config["JWT_SECRET_KEY"],
+                algorithms=["HS256"],
+                options={"verify_exp": False},
+            )
+            import datetime
+            import time
+            exp = payload.get("exp", 0)
+            if time.time() - exp > 3600:  # expired more than 1h ago → force re-login
+                return jsonify({"error": "Token too old to refresh"}), 401
+        except Exception:
+            return jsonify({"error": "Invalid token"}), 401
+    except Exception:
+        return jsonify({"error": "Invalid token"}), 401
+
+    user_id = payload.get("sub")
+    if not user_id:
+        return jsonify({"error": "Invalid token payload"}), 401
+
+    new_token = create_jwt_token(identity=user_id)
+    return jsonify({"access_token": new_token}), 200
 
 
 @auth_bp.route("/logout", methods=["POST"])

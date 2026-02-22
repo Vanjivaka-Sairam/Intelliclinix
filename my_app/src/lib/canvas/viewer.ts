@@ -35,6 +35,7 @@ export class CvatLikeViewer implements IViewer {
 
     private isDragging: boolean = false;
     private lastMouse: { x: number; y: number } = { x: 0, y: 0 };
+    private lastTouchDist: number = 0;
     private resizeObserver!: ResizeObserver;
 
     private isDestroyed: boolean = false;
@@ -218,6 +219,19 @@ export class CvatLikeViewer implements IViewer {
         }
     }
 
+    private getTouchDist(touches: TouchList): number {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    private getTouchMid(touches: TouchList): { x: number; y: number } {
+        return {
+            x: (touches[0].clientX + touches[1].clientX) / 2,
+            y: (touches[0].clientY + touches[1].clientY) / 2
+        };
+    }
+
     private attachEventListeners() {
         this.canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
@@ -314,9 +328,44 @@ export class CvatLikeViewer implements IViewer {
             }
         });
 
-        this.canvas.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 1) e.preventDefault();
+        this.canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                this.isDragging = true;
+                this.lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            } else if (e.touches.length === 2) {
+                this.isDragging = false;
+                this.lastTouchDist = this.getTouchDist(e.touches);
+            }
+            e.preventDefault();
         }, { passive: false });
+
+        this.canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && this.isDragging) {
+                const dx = e.touches[0].clientX - this.lastMouse.x;
+                const dy = e.touches[0].clientY - this.lastMouse.y;
+                this.model.pan(dx, dy);
+                this.lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                this.requestRender();
+            } else if (e.touches.length === 2) {
+                const dist = this.getTouchDist(e.touches);
+                const mid = this.getTouchMid(e.touches);
+
+                if (this.lastTouchDist > 0) {
+                    const factor = dist / this.lastTouchDist;
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.model.zoom(factor, mid.x - rect.left, mid.y - rect.top);
+                    this.requestRender();
+                }
+
+                this.lastTouchDist = dist;
+            }
+            e.preventDefault();
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchend', () => {
+            this.isDragging = false;
+            this.lastTouchDist = 0;
+        });
     }
 
     private requestRender() {

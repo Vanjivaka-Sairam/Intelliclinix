@@ -4,7 +4,7 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from "react";
 import { CvatLikeViewer } from "@/lib/canvas/viewer";
 import { NucleiData, Nucleus } from "@/lib/canvas/types";
-import { Loader2, Maximize2 } from "lucide-react";
+import { Loader2, Maximize2, Minimize2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 type CanvasViewerProps = {
@@ -36,6 +36,8 @@ const CanvasViewer = forwardRef<CanvasViewerRef, CanvasViewerProps>(
         const viewerRef = useRef<CvatLikeViewer | null>(null);
         const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, data: null });
 
+        const [isFullscreen, setIsFullscreen] = useState(false);
+
         // Initialize viewer on mount
         useEffect(() => {
             if (!containerRef.current) return;
@@ -57,7 +59,12 @@ const CanvasViewer = forwardRef<CanvasViewerRef, CanvasViewerProps>(
                 }
             });
 
+            // Listen for fullscreen changes
+            const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+            document.addEventListener('fullscreenchange', onFsChange);
+
             return () => {
+                document.removeEventListener('fullscreenchange', onFsChange);
                 viewer.destroy();
                 viewerRef.current = null;
             };
@@ -189,9 +196,9 @@ const CanvasViewer = forwardRef<CanvasViewerRef, CanvasViewerProps>(
                     <button
                         onClick={toggleFullscreen}
                         className="p-2 bg-black/50 text-white rounded-md hover:bg-black/75 backdrop-blur-sm"
-                        title="Toggle Fullscreen"
+                        title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                     >
-                        <Maximize2 className="w-5 h-5" />
+                        {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
                     </button>
                 </div>
             </div>

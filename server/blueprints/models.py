@@ -13,16 +13,16 @@ AVAILABLE_MODELS = [
     },
     {
         "_id": "ddish_model",
-        "name": "D-DISH (Cellpose + YOLO)",
+        "name": "D-DISH",
         "runner_name": "d_dish",
-        "description": "Hybrid segmentation and classification pipeline",
+        "description": "",
         "input_type": "flat",
     },
     {
         "_id": "fish_model",
-        "name": "FISH (5-Channel)",
+        "name": "FISH",
         "runner_name": "fish",
-        "description": "Requires exactly 5 images: DAPI, FITC, ORANGE, AQUA, SKY",
+        "description": "",
         "input_type": "grouped_5",
     },
 ]

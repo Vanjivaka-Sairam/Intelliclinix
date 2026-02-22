@@ -34,6 +34,8 @@ type InferenceResult = {
 type InferenceResponse = {
     _id: string;
     dataset_id: string;
+    model_id?: string;
+    runner_name?: string;
     status: string;
     results: InferenceResult[];
 };
@@ -361,8 +363,10 @@ export default function InferenceDetailPage() {
     const currentOverlayUrl = activeLayer === "none" ? undefined : activeImageState.layers[activeLayer];
 
     return (
-        <div className="flex flex-col min-h-screen bg-cvat-bg-primary overflow-hidden">
-            {/* Top Bar / Sub-header */}
+        // The DashboardNav is CSS `position:fixed` at top-0 with height ~64px (pt-16 offset in AppLayout).
+        // We fill exactly the remaining viewport so bars never scroll out.
+        <div className="flex flex-col bg-cvat-bg-primary overflow-hidden" style={{ height: 'calc(100vh - var(--navbar-h))' }}>
+            {/* Top Bar / Sub-header — always visible, never scrolls (parent is overflow-hidden fixed-height) */}
             <div className="h-12 border-b border-cvat-border bg-cvat-bg-secondary flex items-center justify-between px-4 shrink-0">
                 <div className="flex items-center gap-4">
                     <div>
@@ -378,18 +382,20 @@ export default function InferenceDetailPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {/* Toolbar */}
-                    <button
-                        onClick={() => setShowComparison(!showComparison)}
-                        className={`p-2 rounded text-xs flex items-center gap-2 border transition-colors ${showComparison
-                            ? "bg-cvat-primary/10 text-cvat-primary border-cvat-primary font-medium"
-                            : "border-cvat-border text-cvat-text-secondary hover:border-cvat-text-primary hover:text-cvat-text-primary"
-                            }`}
-                        disabled={!activeImageState.comparisonUrl}
-                        title="Identify class distribution changes"
-                    >
-                        <Layout size={16} /> Comparing
-                    </button>
+                    {/* Toolbar — Comparing button hidden for FISH models */}
+                    {inference.model_id !== "fish_model" && (
+                        <button
+                            onClick={() => setShowComparison(!showComparison)}
+                            className={`p-2 rounded text-xs flex items-center gap-2 border transition-colors ${showComparison
+                                ? "bg-cvat-primary/10 text-cvat-primary border-cvat-primary font-medium"
+                                : "border-cvat-border text-cvat-text-secondary hover:border-cvat-text-primary hover:text-cvat-text-primary"
+                                }`}
+                            disabled={!activeImageState.comparisonUrl}
+                            title="Identify class distribution changes"
+                        >
+                            <Layout size={16} /> Comparing
+                        </button>
+                    )}
 
                     <div className="h-6 w-px bg-cvat-border mx-2" />
 
@@ -508,8 +514,8 @@ export default function InferenceDetailPage() {
 
                             <div className="w-px h-4 bg-cvat-border" />
 
-                            {/* Opacity Slider */}
-                            <div className="flex items-center gap-2 w-32">
+                            {/* Opacity Slider - Responsive Width */}
+                            <div className="flex items-center gap-2 w-32 md:w-48 lg:w-64">
                                 <Layers size={14} className="text-cvat-text-secondary" />
                                 <input
                                     type="range" min={0} max={1} step={0.1}
@@ -530,7 +536,7 @@ export default function InferenceDetailPage() {
 
                 {/* Right Side Panel (CSV) */}
                 {showCsvPanel && (globalCsvData.length > 0) && (
-                    <div className={`${isCsvExpanded ? 'w-2/3' : 'w-80'} min-w-[20rem] bg-cvat-bg-secondary border-l border-cvat-border flex flex-col shrink-0 transition-all duration-300 ease-in-out`}>
+                    <div className={`${isCsvExpanded ? 'w-1/2' : 'w-80'} min-w-[20rem] max-w-[1200px] bg-cvat-bg-secondary border-l border-cvat-border flex flex-col shrink-0 transition-all duration-300 ease-in-out`}>
                         <CsvViewer
                             data={activeCsvData}
                             className="flex-1"
@@ -546,7 +552,7 @@ export default function InferenceDetailPage() {
                 )}
             </div>
 
-            {/* Bottom Gallery Strip */}
+            {/* Bottom Gallery Strip — always visible, pinned by overflow-hidden parent */}
             <div className="bg-cvat-bg-secondary border-t border-cvat-border shrink-0 flex flex-col transition-all duration-300">
                 <div
                     className="flex justify-between items-center px-2 py-1 bg-cvat-bg-tertiary text-[10px] text-cvat-text-secondary cursor-pointer hover:bg-cvat-border/50 transition-colors"

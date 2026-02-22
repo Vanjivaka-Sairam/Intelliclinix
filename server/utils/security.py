@@ -26,6 +26,15 @@ def create_jwt_token(identity):
         algorithm='HS256'
     )
 
+
+def decode_jwt_token(token: str) -> dict:
+    """Decode and validate a JWT. Returns the payload dict. Raises jwt exceptions on failure."""
+    return jwt.decode(
+        token,
+        current_app.config['JWT_SECRET_KEY'],
+        algorithms=['HS256']
+    )
+
 def jwt_required(f):  #we use this to protect routes 
     @wraps(f)
     def decorated(*args, **kwargs):

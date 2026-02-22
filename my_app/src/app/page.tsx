@@ -63,7 +63,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-cvat-bg-primary">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-screen-2xl mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-cvat-text-primary">Welcome back</h1>
           <p className="text-cvat-text-secondary">
@@ -151,7 +151,7 @@ export default function Home() {
               {recentInferences.map((inference) => (
                 <Link
                   key={inference._id}
-                  href={`/results/${inference._id}`}
+                  href={`/results/inferences?id=${inference._id}`}
                   className="flex items-center justify-between px-6 py-4 hover:bg-cvat-bg-tertiary transition-colors"
                 >
                   <div>

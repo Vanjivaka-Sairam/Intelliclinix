@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { apiFetch, clearStoredAuth } from "@/lib/api";
+import { logout } from "@/lib/api";
+import { getStoredUser } from "@/hooks/use-auth-guard";
+import { ChevronRight } from "lucide-react";
 import {
   Upload,
   PieChart,
@@ -52,16 +54,34 @@ export default function DashboardNav() {
       .join(" / ");
   };
 
-  const handleLogout = async () => {
-    try {
-      await apiFetch("/api/auth/logout", { method: "POST" });
-    } catch (err) {
-      console.error("Logout error:", err);
-    } finally {
-      clearStoredAuth();
-      window.location.href = "/login";
-    }
+  const SEGMENT_LABELS: Record<string, string> = {
+    "": "Dashboard",
+    upload: "Upload Data",
+    inference: "Run Inference",
+    results: "Results",
+    inferences: "Inferences",
+    archive: "Archive",
   };
+
+  const buildCrumbs = () => {
+    const segments = pathname.split("/").filter(Boolean);
+    const crumbs: { label: string; href: string }[] = [
+      { label: "Dashboard", href: "/" },
+    ];
+    let path = "";
+    for (const seg of segments) {
+      path += `/${seg}`;
+      crumbs.push({
+        label: SEGMENT_LABELS[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1),
+        href: path,
+      });
+    }
+    return crumbs;
+  };
+
+  const crumbs = buildCrumbs();
+
+  const handleLogout = () => logout();
 
   return (
     <div className="cvat-header">
@@ -130,7 +150,13 @@ export default function DashboardNav() {
                   <div className="py-2">
                     <div className="px-4 py-2 border-b border-cvat-border-light">
                       <p className="text-sm font-medium text-cvat-text-primary">
-                        {typeof window !== 'undefined' ? localStorage.getItem('username') || 'User' : 'User'}
+                        {(() => {
+                          const u = getStoredUser();
+                          if (u?.first_name) return `${u.first_name} ${u.last_name ?? ""}`.trim();
+                          if (u?.username) return u.username;
+                          if (typeof window !== 'undefined') return localStorage.getItem('username') || 'User';
+                          return 'User';
+                        })()}
                       </p>
                     </div>
                     {/* <button className="w-full px-4 py-2 text-left text-sm text-cvat-text-primary hover:bg-cvat-bg-tertiary flex items-center">
@@ -158,12 +184,27 @@ export default function DashboardNav() {
         </div>
       </div>
 
-      {/* Breadcrumb / Subtitle Bar */}
+      {/* Breadcrumb bar */}
       <div className="bg-cvat-bg-header-light py-1 px-4">
-        <div className="max-w-7xl mx-auto flex items-center text-xs text-cvat-text-white/70">
-          {/* <span>Medical Image Annotation Platform</span> */}
-          <span className="mx-2">•</span>
-          <span className="font-medium text-cvat-text-white">{getPageTitle()}</span>
+        <div className="max-w-7xl mx-auto flex items-center gap-1 text-xs text-cvat-text-white/60">
+          {crumbs.map((crumb, i) => {
+            const isLast = i === crumbs.length - 1;
+            return (
+              <span key={crumb.href} className="flex items-center gap-1">
+                {i > 0 && <ChevronRight className="h-3 w-3 text-cvat-text-white/30" />}
+                {isLast ? (
+                  <span className="font-medium text-cvat-text-white">{crumb.label}</span>
+                ) : (
+                  <Link
+                    href={crumb.href}
+                    className="hover:text-cvat-text-white transition-colors"
+                  >
+                    {crumb.label}
+                  </Link>
+                )}
+              </span>
+            );
+          })}
         </div>
       </div>
     </div>

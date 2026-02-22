@@ -100,7 +100,7 @@ export default function InferencePage() {
 
   return (
     <div className="min-h-screen bg-cvat-bg-primary">
-      <div className="max-w-3xl mx-auto px-4 py-10">
+      <div className="max-w-5xl mx-auto px-4 py-10">
         <div className="cvat-card p-6">
           <h1 className="text-2xl font-semibold text-cvat-text-primary mb-6">
             Run Inference
