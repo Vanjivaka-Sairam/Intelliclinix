@@ -139,21 +139,29 @@ export class CvatLikeViewer implements IViewer {
 
         if (data && data.nuclei.length > 0) {
             this.rbush = new RBush();
-            // Bulk load RBush
-            const items = data.nuclei.map(n => {
-                // Determine bounding box
-                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                for (const p of n.polygon) {
-                    if (p[0] < minX) minX = p[0];
-                    if (p[0] > maxX) maxX = p[0];
-                    if (p[1] < minY) minY = p[1];
-                    if (p[1] > maxY) maxY = p[1];
+            // Pre-process: ensure every nucleus has a polygon (synthesize from bbox for FISH)
+            for (const n of data.nuclei) {
+                if ((!n.polygon || n.polygon.length === 0) && n.bbox) {
+                    const { x1, y1, x2, y2 } = n.bbox;
+                    n.polygon = [
+                        [x1, y1], [x2, y1], [x2, y2], [x1, y2]
+                    ];
                 }
-                return {
-                    minX, minY, maxX, maxY,
-                    item: n
-                };
-            });
+            }
+            // Bulk load RBush
+            const items = data.nuclei
+                .filter(n => n.polygon && n.polygon.length > 0)
+                .map(n => {
+                    // Determine bounding box from polygon
+                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                    for (const p of n.polygon!) {
+                        if (p[0] < minX) minX = p[0];
+                        if (p[0] > maxX) maxX = p[0];
+                        if (p[1] < minY) minY = p[1];
+                        if (p[1] > maxY) maxY = p[1];
+                    }
+                    return { minX, minY, maxX, maxY, item: n };
+                });
             this.rbush.load(items);
             console.log("Viewer: RBush loaded with", items.length, "items");
         } else {
@@ -275,10 +283,10 @@ export class CvatLikeViewer implements IViewer {
 
                 let found: Nucleus | null = null;
                 for (const candidate of candidates) {
-                    const poly = candidate.item.polygon; // [[x,y],...]
-                    if (pointInPolygon([imgX, imgY], poly)) {
+                    const poly = candidate.item.polygon as number[][] | null | undefined;
+                    if (poly && poly.length >= 3 && pointInPolygon([imgX, imgY], poly)) {
                         found = candidate.item;
-                        console.log("Hit found:", found.id);
+                        console.log("Hit found:", (found as Nucleus).id);
                         break;
                     }
                 }
@@ -344,49 +352,63 @@ export class CvatLikeViewer implements IViewer {
             // 5. Draw Overlay
             if (this.overlayBitmap) {
                 this.ctx.globalAlpha = this.overlayOpacity;
-                this.ctx.drawImage(this.overlayBitmap, 0, 0, this.model.imageWidth, this.model.imageHeight);
+                // Use model image size; fall back to the overlay bitmap's own size
+                // if the source image hasn't been loaded yet (avoids drawing at 0x0)
+                const dw = this.model.imageWidth || this.overlayBitmap.width;
+                const dh = this.model.imageHeight || this.overlayBitmap.height;
+                this.ctx.drawImage(this.overlayBitmap, 0, 0, dw, dh);
                 this.ctx.globalAlpha = 1.0;
             }
 
-            // DEBUG: Draw ALL Nuclei to verify alignment
+            // Draw ALL nucleus outlines (subtle, for orientation)
             if (this.nucleiData && this.nucleiData.nuclei) {
                 this.ctx.lineWidth = 1 / this.model.scale;
-                this.ctx.strokeStyle = 'cyan';
-                this.ctx.globalAlpha = 0.3;
+                this.ctx.strokeStyle = 'rgba(100, 200, 255, 0.35)';
+                this.ctx.globalAlpha = 1.0;
 
                 for (const nucleus of this.nucleiData.nuclei) {
                     const poly = nucleus.polygon;
-                    if (poly.length < 3) continue;
+                    if (!poly || poly.length < 3) continue;
 
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(poly[0][0], poly[0][1]);
-                    for (let i = 1; i < poly.length; i++) {
-                        this.ctx.lineTo(poly[i][0], poly[i][1]);
+                    // If nucleus has a bbox (FISH), draw as rectangle for clarity
+                    if (nucleus.bbox) {
+                        const { x1, y1, x2, y2 } = nucleus.bbox;
+                        this.ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                    } else {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(poly[0][0], poly[0][1]);
+                        for (let i = 1; i < poly.length; i++) {
+                            this.ctx.lineTo(poly[i][0], poly[i][1]);
+                        }
+                        this.ctx.closePath();
+                        this.ctx.stroke();
                     }
-                    this.ctx.closePath();
-                    this.ctx.stroke();
                 }
-                this.ctx.globalAlpha = 1.0;
             }
 
-            // Draw Vector Layer (Interactive)
-            // We can draw *just* the hovered nucleus for performance, or all if we want outlines
-            // For now, let's draw the hovered nucleus on top to highlight it.
+            // Draw hovered nucleus highlight on top
             if (this.hoveredNucleus) {
-                const poly = this.hoveredNucleus.polygon;
-                if (poly.length > 0) {
+                const n = this.hoveredNucleus;
+                const poly = n.polygon;
+
+                this.ctx.strokeStyle = '#00FF88';
+                this.ctx.lineWidth = 2 / this.model.scale;
+                this.ctx.fillStyle = 'rgba(0, 255, 136, 0.18)';
+
+                if (n.bbox) {
+                    // FISH: draw as a crisp rectangle
+                    const { x1, y1, x2, y2 } = n.bbox;
+                    this.ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                    this.ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+                } else if (poly && poly.length > 0) {
+                    // D-DISH: draw the contour polygon
                     this.ctx.beginPath();
                     this.ctx.moveTo(poly[0][0], poly[0][1]);
                     for (let i = 1; i < poly.length; i++) {
                         this.ctx.lineTo(poly[i][0], poly[i][1]);
                     }
                     this.ctx.closePath();
-
-                    this.ctx.strokeStyle = '#00FF00'; // Bright green
-                    this.ctx.lineWidth = 2 / this.model.scale; // Constant width regardless of zoom
                     this.ctx.stroke();
-
-                    this.ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
                     this.ctx.fill();
                 }
             }

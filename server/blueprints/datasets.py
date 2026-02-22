@@ -23,13 +23,20 @@ def upload_dataset(current_user_id):
         return jsonify({"error": "No files selected"}), 400
 
     dataset_name = request.form.get('name', 'Untitled Dataset')
-    
+
+    # Model-aware validation
+    model_id  = request.form.get('model_id', '')
+    model_def = get_model_by_id(model_id) if model_id else None
+    input_type = model_def.get("input_type", "flat") if model_def else "flat"
+
+    if input_type == "grouped_5" and len(files) != 5:
+        return jsonify({"error": "This model requires exactly 5 images (DAPI, FITC, ORANGE, AQUA, SKY)."}), 400
+
     file_references = []
     for file in files:
         try:
-            # Images are saved to GridFS
             gridfs_id = save_file_to_gridfs(
-                file, 
+                file,
                 metadata={'type': 'image', 'uploader': current_user_id}
             )
             file_references.append({
@@ -44,9 +51,12 @@ def upload_dataset(current_user_id):
         "name": dataset_name,
         "owner_id": ObjectId(current_user_id),
         "created_at": datetime.datetime.utcnow(),
+        "model_id": model_id,
+        "input_type": input_type,
         "files": file_references
     }
     dataset_id = db.datasets.insert_one(dataset_doc).inserted_id
+
 
     response_payload = {
         "message": "Dataset created successfully",

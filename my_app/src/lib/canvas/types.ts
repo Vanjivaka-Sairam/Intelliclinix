@@ -27,12 +27,9 @@ export interface OverlayData {
 
 export interface Nucleus {
     id: number;
-    polygon: number[][]; // [[x,y], [x,y], ...]
-    stats: {
-        Her2: number;
-        Chr17: number;
-        Fusion: number;
-    };
+    polygon?: number[][] | null; // [[x,y], [x,y], ...] contour (D-DISH) or bbox corners (FISH)
+    bbox?: { x1: number; y1: number; x2: number; y2: number }; // raw bbox (FISH only)
+    stats: Record<string, number>; // generic: {Her2, Chr17, ...} or {Green, Red, Aqua, Fusion}
 }
 
 export interface NucleiData {
