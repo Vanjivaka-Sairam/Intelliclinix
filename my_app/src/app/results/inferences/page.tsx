@@ -155,7 +155,10 @@ export default function InferenceDetailPage() {
     // 4. Computed: Navigable Images (exclude global_detections dummy entry)
     const navigableImages = useMemo(() => {
         if (!inference?.results) return [];
-        return inference.results.filter(r => r.source_filename !== "global_detections.csv" && r.source_image_gridfs_id);
+        return inference.results.filter(r =>
+            r.source_filename !== "global_detections.csv" &&
+            !!r.source_image_gridfs_id  // must have a base image to display
+        );
     }, [inference]);
 
     // 5. Load Active Image Assets when index changes
@@ -175,19 +178,22 @@ export default function InferenceDetailPage() {
             // Find artifact IDs
             const stitchedArt = result.artifacts?.find(a => a.kind === "overlay_stitched");
             const compareArt = result.artifacts?.find(a => a.kind === "figure_compare");
-            const classMaskArt = result.artifacts?.find(a => a.kind === "class_mask"); // or use result.class_mask_id
+            const classMaskArt = result.artifacts?.find(a => a.kind === "class_mask");
             const instMaskArt = result.artifacts?.find(a => a.kind === "instance_mask");
             const nucleiArt = result.artifacts?.find(a => a.kind === "nuclei_json");
 
-            // Prioritize artifacts, fallback to legacy IDs
             const stitchedId = stitchedArt?.gridfs_id;
             const compareId = compareArt?.gridfs_id;
             const classId = classMaskArt?.gridfs_id || result.class_mask_id;
             const instId = instMaskArt?.gridfs_id || result.instance_mask_id;
             const nucleiId = nucleiArt?.gridfs_id;
 
+            // source_image_gridfs_id is now always the raw base image
+            // (DAPI for FISH, raw scan for D-DISH / CellPose)
+            const sourceId = result.source_image_gridfs_id;
+
             const [src, stitched, compare, cls, inst, nuclei] = await Promise.all([
-                fetchFileUrl(result.source_image_gridfs_id!),
+                sourceId ? fetchFileUrl(sourceId) : undefined,
                 stitchedId ? fetchFileUrl(stitchedId) : undefined,
                 compareId ? fetchFileUrl(compareId) : undefined,
                 classId ? fetchFileUrl(classId) : undefined,
@@ -207,7 +213,7 @@ export default function InferenceDetailPage() {
                     nucleiUrl: nuclei
                 });
 
-                // Auto-select best layer
+                // Default active layer
                 if (stitched) setActiveLayer("stitchedOverlay");
                 else if (inst) setActiveLayer("instanceMask");
                 else if (cls) setActiveLayer("classMask");
@@ -232,14 +238,15 @@ export default function InferenceDetailPage() {
     useEffect(() => {
         if (!navigableImages.length) return;
 
-        // Load IDs that are not yet loaded
-        // Logic: Load current +/- 5 images
         const windowSize = 5;
         const start = Math.max(0, activeImageIndex - windowSize);
         const end = Math.min(navigableImages.length, activeImageIndex + windowSize + 1);
 
         const toLoad = navigableImages.slice(start, end)
-            .filter(r => r.source_image_gridfs_id && !galleryUrls[r.source_filename]);
+            .filter(r => {
+                const thumbId = r.source_image_gridfs_id;
+                return thumbId && !galleryUrls[r.source_filename];
+            });
 
         if (toLoad.length === 0) return;
 
@@ -248,10 +255,9 @@ export default function InferenceDetailPage() {
         const loadBatch = async () => {
             const newUrls: Record<string, string> = {};
             await Promise.all(toLoad.map(async (r) => {
-                if (r.source_image_gridfs_id) {
-                    // Try to use a thumbnail endpoint if exists, else full image
-                    // For now using full image as thumbnail is not available
-                    const url = await fetchFileUrl(r.source_image_gridfs_id);
+                const thumbId = r.source_image_gridfs_id;
+                if (thumbId) {
+                    const url = await fetchFileUrl(thumbId);
                     if (url) newUrls[r.source_filename] = url;
                 }
             }));
@@ -274,13 +280,17 @@ export default function InferenceDetailPage() {
         const filename = navigableImages[activeImageIndex].source_filename;
         const getBasename = (path: string) => path.split(/[/\\]/).pop() || path;
         const targetBasename = getBasename(filename);
+        // Stem without extension, for FISH CSV matching (image column = stem)
+        const targetStem = targetBasename.replace(/\.[^/.]+$/, "").replace(/_DAPI$/i, "");
 
-        // Search matching rows. 
-        // We match if row.image exactly matches filename OR if basenames match (to handle path variations)
         return globalCsvData.filter(row => {
-            const rowImg = row.image || row.Image; // Handle potential case variance though d_dish_runner uses 'image'
+            const rowImg = row.image || row.Image;
             if (!rowImg) return false;
-            return rowImg === filename || getBasename(rowImg) === targetBasename;
+            const rowBasename = getBasename(String(rowImg));
+            const rowStem = rowBasename.replace(/\.[^/.]+$/, "");
+            return rowImg === filename ||
+                rowBasename === targetBasename ||
+                rowStem === targetStem;        // FISH: image col is stem (no extension)
         });
     }, [globalCsvData, activeImageIndex, navigableImages]);
 

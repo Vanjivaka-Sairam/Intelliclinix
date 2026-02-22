@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, UploadCloud } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 import { toast } from "react-hot-toast";
+
+type Model = {
+  _id: string;
+  name: string;
+  description?: string;
+  input_type?: string;
+};
 
 export default function UploadPage() {
   const { isLoading } = useAuthGuard();
@@ -12,7 +19,20 @@ export default function UploadPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastDatasetId, setLastDatasetId] = useState<string | null>(null);
-  // Upload page no longer offers running inference on upload.
+  const [models, setModels] = useState<Model[]>([]);
+  const [selectedModel, setSelectedModel] = useState("");
+
+  // Derived: does the selected model require exactly 5 images?
+  const selectedModelDef = models.find((m) => m._id === selectedModel);
+  const requiresExact5 = selectedModelDef?.input_type === "grouped_5";
+
+  useEffect(() => {
+    if (isLoading) return;
+    apiFetch("/api/models/")
+      .then((res) => res.json())
+      .then((data: Model[]) => setModels(data))
+      .catch(() => toast.error("Failed to load models"));
+  }, [isLoading]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files) return;
@@ -23,6 +43,7 @@ export default function UploadPage() {
     setDatasetName("");
     setSelectedFiles([]);
     setLastDatasetId(null);
+    setSelectedModel("");
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -38,15 +59,18 @@ export default function UploadPage() {
       return;
     }
 
+    if (requiresExact5 && selectedFiles.length !== 5) {
+      toast.error("This model requires exactly 5 images (DAPI, FITC, ORANGE, AQUA, SKY).");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       const formData = new FormData();
       formData.append("name", datasetName.trim());
-      // We only create datasets from this page; running inference is handled separately.
-      selectedFiles.forEach((file) => {
-        formData.append("files", file);
-      });
+      if (selectedModel) formData.append("model_id", selectedModel);
+      selectedFiles.forEach((file) => formData.append("files", file));
 
       const response = await apiFetch("/api/datasets/upload", {
         method: "POST",
@@ -54,9 +78,7 @@ export default function UploadPage() {
       });
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || "Upload failed");
-      }
+      if (!response.ok) throw new Error(data.error || "Upload failed");
 
       toast.success("Dataset uploaded successfully");
       setLastDatasetId(data.dataset_id);
@@ -68,8 +90,6 @@ export default function UploadPage() {
       setIsSubmitting(false);
     }
   };
-
-  // No model loading on this page.
 
   if (isLoading) {
     return (
@@ -94,6 +114,7 @@ export default function UploadPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Dataset Name */}
             <div>
               <label htmlFor="dataset-name" className="block text-sm font-medium text-cvat-text-primary">
                 Dataset Name
@@ -102,14 +123,39 @@ export default function UploadPage() {
                 id="dataset-name"
                 type="text"
                 value={datasetName}
-                onChange={(event) => setDatasetName(event.target.value)}
+                onChange={(e) => setDatasetName(e.target.value)}
                 className="mt-2 w-full rounded-lg border border-cvat-border bg-cvat-bg-secondary px-4 py-3 text-cvat-text-primary focus:border-cvat-primary focus:ring-cvat-primary"
-                placeholder="e.g. Brain Tumor Batch A"
+                placeholder="e.g. AL_16_22_ABL1"
                 disabled={isSubmitting}
                 required
               />
             </div>
 
+            {/* Model Dropdown */}
+            <div>
+              <label htmlFor="model-select" className="block text-sm font-medium text-cvat-text-primary">
+                Model <span className="text-cvat-text-secondary font-normal">(optional)</span>
+              </label>
+              <select
+                id="model-select"
+                value={selectedModel}
+                onChange={(e) => { setSelectedModel(e.target.value); setSelectedFiles([]); }}
+                className="mt-2 w-full rounded-lg border border-cvat-border bg-cvat-bg-secondary px-4 py-3 text-cvat-text-primary focus:border-cvat-primary focus:ring-cvat-primary"
+                disabled={isSubmitting}
+              >
+                <option value="">— No model selected —</option>
+                {models.map((model) => (
+                  <option key={model._id} value={model._id}>
+                    {model.name}
+                  </option>
+                ))}
+              </select>
+              {selectedModelDef?.description && (
+                <p className="mt-1 text-xs text-cvat-text-secondary">{selectedModelDef.description}</p>
+              )}
+            </div>
+
+            {/* File Picker */}
             <div>
               <label className="block text-sm font-medium text-cvat-text-primary">Image Files</label>
               <div className="mt-2 border-2 border-dashed border-cvat-border rounded-lg p-6 text-center bg-cvat-bg-secondary">
@@ -125,12 +171,21 @@ export default function UploadPage() {
                 <label htmlFor="files" className="cursor-pointer text-cvat-primary font-medium">
                   Click to browse
                 </label>
-                <p className="mt-2 text-sm text-cvat-text-secondary">
-                  or drag and drop multiple files here
-                </p>
+
+                {requiresExact5 ? (
+                  <p className="mt-2 text-sm text-cvat-text-secondary">
+                    Select <strong>exactly 5</strong> channel images: DAPI, FITC, ORANGE, AQUA, SKY
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-cvat-text-secondary">
+                    or drag and drop multiple files here
+                  </p>
+                )}
+
                 {selectedFiles.length > 0 && (
-                  <p className="mt-3 text-sm text-cvat-text-primary">
+                  <p className={`mt-3 text-sm font-medium ${requiresExact5 && selectedFiles.length !== 5 ? "text-red-400" : "text-cvat-text-primary"}`}>
                     {selectedFiles.length} file(s) selected
+                    {requiresExact5 && selectedFiles.length !== 5 && " — need exactly 5"}
                   </p>
                 )}
               </div>
@@ -140,7 +195,7 @@ export default function UploadPage() {
               <button
                 type="submit"
                 className="cvat-button-primary flex-1 py-3 rounded-lg font-medium"
-                disabled={isSubmitting}
+                disabled={isSubmitting || (requiresExact5 && selectedFiles.length !== 5)}
               >
                 {isSubmitting ? (
                   <span className="flex items-center justify-center gap-2">
@@ -172,4 +227,3 @@ export default function UploadPage() {
     </div>
   );
 }
-

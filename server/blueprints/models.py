@@ -9,13 +9,22 @@ AVAILABLE_MODELS = [
         "name": "Cellpose",
         "runner_name": "cellpose",
         "description": "Cellpose-based segmentation model",
+        "input_type": "flat",
     },
     {
         "_id": "ddish_model",
         "name": "D-DISH (Cellpose + YOLO)",
         "runner_name": "d_dish",
         "description": "Hybrid segmentation and classification pipeline",
-    }
+        "input_type": "flat",
+    },
+    {
+        "_id": "fish_model",
+        "name": "FISH (5-Channel)",
+        "runner_name": "fish",
+        "description": "Requires exactly 5 images: DAPI, FITC, ORANGE, AQUA, SKY",
+        "input_type": "grouped_5",
+    },
 ]
 
 

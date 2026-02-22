@@ -14,6 +14,9 @@ class Config:
     CELLPOSE_MODEL_PATH = os.getenv('CELLPOSE_MODEL_PATH')
     DDISH_CELLPOSE_MODEL_PATH = os.getenv('DDISH_CELLPOSE_MODEL_PATH')
     DDISH_YOLO_MODEL_PATH = os.getenv('DDISH_YOLO_MODEL_PATH')
+    FISH_NUCLEI_MODEL_PATH = os.getenv('FISH_NUCLEI_MODEL_PATH')
+    FISH_GENE_MODEL_PATH = os.getenv('FISH_GENE_MODEL_PATH')
+
     
 class DevelopmentConfig(Config):
     DEBUG = True
