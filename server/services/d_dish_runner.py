@@ -35,8 +35,6 @@ from PIL import Image
 from bson.objectid import ObjectId
 
 # -------------------- USER CONFIG --------------------
-IMAGES_DIR = "./images"
-OUT_DIR    = ""
 
 # Load defaults from env or use relative fallback (for standalone use)
 CELLPOSE_WEIGHTS = os.getenv("DDISH_CELLPOSE_MODEL_PATH", "./D-DISH_nuclei_v1")
@@ -557,13 +555,28 @@ class DDishRunner(ModelRunner):
                  ]
              })
 
-        # --- Generate Global CSV ---
+        # --- Generate Global CSV (one row per nucleus, count of each class) ---
         if all_rows:
+            # Class columns in sorted key order (matches CLASS_NAMES order)
+            class_cols = [CLASS_NAMES[k] for k in sorted(CLASS_NAMES.keys())]
+
+            # Aggregate: {(image, nucleus_id): {class_name: count}}
+            from collections import defaultdict
+            nucleus_counts: Dict[tuple, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+            for row in all_rows:
+                key = (row["image"], row["nucleus_id"])
+                nucleus_counts[key][row["cls_name_model"]] += 1
+
             csv_buf = io.StringIO()
-            headers = ["image","nucleus_id","cls_id","cls_name_model","conf","x1","y1","x2","y2"]
-            w = csv.DictWriter(csv_buf, fieldnames=headers)
+            headers = ["image", "nucleus_id"] + class_cols
+            w = csv.DictWriter(csv_buf, fieldnames=headers, extrasaction="ignore")
             w.writeheader()
-            w.writerows(all_rows)
+            for (img, nid), cls_counts in sorted(nucleus_counts.items(), key=lambda x: (x[0][0], x[0][1])):
+                csv_row = {"image": img, "nucleus_id": nid}
+                for col in class_cols:
+                    csv_row[col] = cls_counts.get(col, 0)
+                w.writerow(csv_row)
+
             csv_bytes = csv_buf.getvalue().encode('utf-8')
             
             csv_id = save_bytes_to_gridfs(

@@ -14,15 +14,7 @@ class ModelRunner(ABC):
 
     @abstractmethod
     def run_inference_job(self, inference_id_str: str) -> None:
-        """
-        Run inference for the given inference document.
 
-        Implementations should:
-        - Load the inference + dataset metadata from the database
-        - Iterate over dataset files
-        - Produce masks / outputs
-        - Persist outputs and update inference status
-        """
         raise NotImplementedError
 
     def update_inference_status(
@@ -32,7 +24,7 @@ class ModelRunner(ABC):
         results: Optional[List[Dict[str, Any]]] = None,
         error: Optional[str] = None,
     ) -> None:
-        """Helper: Update inference document status and optional results/error."""
+    
         update_doc: Dict[str, Any] = {
             "$set": {
                 "status": status,

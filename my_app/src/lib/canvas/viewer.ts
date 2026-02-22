@@ -294,14 +294,6 @@ export class CvatLikeViewer implements IViewer {
                     // Even if same nucleus, update position for tooltip logic
                     this.hoverHandler(found, e.clientX, e.clientY);
                 } else if (!found && this.hoveredNucleus === null && this.hoverHandler) {
-                    // Ensure tooltip hides if we move out of bounds
-                    // Optimization: Only fire if we previously had a nucleus or need to clear
-                    // But we rely on this to hide the tooltip, so we should fire if it was visible?
-                    // actually page component handles visibility based on null.
-                    // To avoid spamming nulls:
-                    // We can't easily know if the parent thinks it's visible without state.
-                    // But since we are 'hoveredNucleus === null', we might have just exited.
-                    // Let's just fire it.
                     this.hoverHandler(null, e.clientX, e.clientY);
                 }
             }

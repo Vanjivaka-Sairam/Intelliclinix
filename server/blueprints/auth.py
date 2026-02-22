@@ -49,22 +49,22 @@ def signup():
     if db.users.find_one({"email": user_data.email}):
         return jsonify({"error": "An account with this email already exists"}), 409
 
-    try:
-        cvat_response, status_code = create_cvat_user(
-            username=user_data.username,
-            email=user_data.email,
-            password=user_data.password,
-            first_name=user_data.first_name,
-            last_name=user_data.last_name,
-        )
+    # try:
+    #     cvat_response, status_code = create_cvat_user(
+    #         username=user_data.username,
+    #         email=user_data.email,
+    #         password=user_data.password,
+    #         first_name=user_data.first_name,
+    #         last_name=user_data.last_name,
+    #     )
 
-        if status_code != 201:
-            error_message = cvat_response.get_json().get("error", "CVAT registration failed")
-            return jsonify({"error": error_message}), 500
+    #     if status_code != 201:
+    #         error_message = cvat_response.get_json().get("error", "CVAT registration failed")
+    #         return jsonify({"error": error_message}), 500
 
-        # No need to store cvat_user_id; usernames are unique
-    except Exception as e:
-        return jsonify({"error": f"CVAT user creation failed: {str(e)}"}), 500
+    #     # No need to store cvat_user_id; usernames are unique
+    # except Exception as e:
+    #     return jsonify({"error": f"CVAT user creation failed: {str(e)}"}), 500
 
     # Save user to MongoDB only if CVAT registration succeeded
     hashed_password = hash_password(user_data.password)
@@ -120,12 +120,12 @@ def login():
     if isinstance(last_login, datetime):
         user_data["last_login"] = last_login.isoformat()
 
-    # Run CVAT login in background to avoid blocking the response
-    threading.Thread(
-        target=cvat_login_background,
-        args=(login_data.username, login_data.password),
-        daemon=True
-    ).start()
+    # # Run CVAT login in background to avoid blocking the response
+    # threading.Thread(
+    #     target=cvat_login_background,
+    #     args=(login_data.username, login_data.password),
+    #     daemon=True
+    # ).start()
 
     return jsonify({"access_token": token, "user": user_data}), 200
 
@@ -142,11 +142,11 @@ def logout(current_user_id):
     if not user:
         return jsonify({"error": "User not found"}), 404
     
-    # Run CVAT logout in background to avoid blocking the response
-    threading.Thread(
-        target=cvat_logout_background,
-        daemon=True
-    ).start()
+    # # Run CVAT logout in background to avoid blocking the response
+    # threading.Thread(
+    #     target=cvat_logout_background,
+    #     daemon=True
+    # ).start()
 
     # Return success immediately - CVAT logout happens in background
     return jsonify({"logout": True, "message": "Logged out successfully"}), 200

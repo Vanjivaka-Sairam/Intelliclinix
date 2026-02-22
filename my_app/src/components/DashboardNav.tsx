@@ -75,9 +75,9 @@ export default function DashboardNav() {
                 <Brain className="h-6 w-6 text-cvat-primary" />
                 <span className="text-cvat-text-white font-bold text-xl">IntelliClinix</span>
               </div>
-              <span className="ml-2 px-2 py-1 bg-cvat-bg-header-light text-xs text-cvat-text-white rounded-md">
-                AI Annotation
-              </span>
+              {/* <span className="ml-2 px-2 py-1 bg-cvat-bg-header-light text-xs text-cvat-text-white rounded-md">
+
+              </span> */}
             </div>
           </Link>
 
@@ -161,7 +161,7 @@ export default function DashboardNav() {
       {/* Breadcrumb / Subtitle Bar */}
       <div className="bg-cvat-bg-header-light py-1 px-4">
         <div className="max-w-7xl mx-auto flex items-center text-xs text-cvat-text-white/70">
-          <span>Medical Image Annotation Platform</span>
+          {/* <span>Medical Image Annotation Platform</span> */}
           <span className="mx-2">•</span>
           <span className="font-medium text-cvat-text-white">{getPageTitle()}</span>
         </div>
