@@ -21,9 +21,9 @@ type InferenceSummary = {
 
 export default function Home() {
   const { isLoading } = useAuthGuard();
-  const [datasetCount, setDatasetCount] = useState(0);
-  const [inferenceCount, setInferenceCount] = useState(0);
-  const [recentInferences, setRecentInferences] = useState<InferenceSummary[]>([]);
+  const [datasetCount, setDatasetCount] = useState<number | null>(null);
+  const [inferenceCount, setInferenceCount] = useState<number | null>(null);
+  const [recentInferences, setRecentInferences] = useState<InferenceSummary[] | null>(null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -112,14 +112,22 @@ export default function Home() {
         <div className="mt-10 grid gap-6 md:grid-cols-3">
           <div className="cvat-card p-6">
             <p className="text-sm text-cvat-text-secondary">Datasets</p>
-            <p className="text-4xl font-bold text-cvat-text-primary mt-2">{datasetCount}</p>
+            {datasetCount === null ? (
+              <div className="h-10 w-16 mt-2 bg-cvat-border-light animate-pulse rounded"></div>
+            ) : (
+              <p className="text-4xl font-bold text-cvat-text-primary mt-2">{datasetCount}</p>
+            )}
             <p className="text-sm text-cvat-text-tertiary mt-1">
               Total datasets stored in your workspace
             </p>
           </div>
           <div className="cvat-card p-6">
             <p className="text-sm text-cvat-text-secondary">Inference Jobs</p>
-            <p className="text-4xl font-bold text-cvat-text-primary mt-2">{inferenceCount}</p>
+            {inferenceCount === null ? (
+              <div className="h-10 w-16 mt-2 bg-cvat-border-light animate-pulse rounded"></div>
+            ) : (
+              <p className="text-4xl font-bold text-cvat-text-primary mt-2">{inferenceCount}</p>
+            )}
             <p className="text-sm text-cvat-text-tertiary mt-1">
               Jobs submitted across all datasets
             </p>
@@ -142,7 +150,12 @@ export default function Home() {
               View all
             </Link>
           </div>
-          {recentInferences.length === 0 ? (
+          {recentInferences === null ? (
+            <div className="cvat-card p-6 space-y-4">
+              <div className="h-6 w-1/3 bg-cvat-border-light animate-pulse rounded"></div>
+              <div className="h-6 w-1/4 bg-cvat-border-light animate-pulse rounded"></div>
+            </div>
+          ) : recentInferences.length === 0 ? (
             <div className="cvat-card p-6 text-cvat-text-secondary">
               No inference jobs yet. Start by uploading a dataset.
             </div>

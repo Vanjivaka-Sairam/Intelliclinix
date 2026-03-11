@@ -89,35 +89,52 @@ export async function apiFetch(
 ): Promise<Response> {
   const { auth = true, _isRetry = false, ...rest } = options;
   const headers = new Headers(rest.headers || {});
+  console.log(`[apiFetch] Starting request to ${path}, auth=${auth}, _isRetry=${_isRetry}`);
 
   if (auth) {
     let token = getStoredToken();
+    console.log(`[apiFetch] Token present: ${!!token}`);
 
     // Proactively refresh if the token is about to expire
     if (token && tokenExpiresSoon(token) && !_isRetry) {
+      console.log(`[apiFetch] Proactive token refresh triggered for ${path}`);
       const newToken = await refreshAccessToken();
-      if (newToken) token = newToken;
+      if (newToken) {
+        console.log(`[apiFetch] Proactive refresh succeeded`);
+        token = newToken;
+      } else {
+        console.warn(`[apiFetch] Proactive refresh failed`);
+      }
     }
 
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
+    } else {
+       console.warn(`[apiFetch] No token available for authenticated request to ${path}`);
     }
   }
 
   const url = path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
   const response = await fetch(url, { ...rest, headers });
+  console.log(`[apiFetch] Request to ${path} completed with status: ${response.status}`);
 
   // Auto-refresh on 401 (once) — covers race conditions where the token
   // expired between the proactive check and the server receiving the request
   if (response.status === 401 && auth && !_isRetry) {
+    console.warn(`[apiFetch] 401 received for ${path}, attempting reactive refresh...`);
     const newToken = await refreshAccessToken();
     if (newToken) {
+       console.log(`[apiFetch] Reactive refresh succeeded, retrying ${path}`);
       // Retry original request with fresh token
       return apiFetch(path, { ...options, _isRetry: true });
     }
+    console.error(`[apiFetch] Reactive refresh failed or no new token, clearing auth...`);
     // Refresh failed → token is truly invalid, clear auth
     clearStoredAuth();
-    if (isBrowser) window.location.href = "/login";
+    if (isBrowser) {
+        console.log(`[apiFetch] Redirecting to /login due to auth failure`);
+        window.location.href = "/login";
+    }
   }
 
   return response;

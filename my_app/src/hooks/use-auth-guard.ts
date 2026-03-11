@@ -37,20 +37,22 @@ export const setStoredUser = (user: CurrentUser) => {
 export function useAuthGuard() {
   const router = useRouter();
 
-  // Synchronously decide initial state before first render:
-  // - No token → start loading (blank screen) and redirect immediately
-  // - Has token + cached user → show page immediately without spinner
-  const hasToken = typeof window !== "undefined" && !!getStoredToken();
-  const cachedUser = hasToken ? getStoredUser() : null;
-
-  const [user, setUser] = useState<CurrentUser>(cachedUser);
-  const [isLoading, setIsLoading] = useState(!cachedUser || !hasToken);
+  // Initialize state purely, without reading from localStorage during SSR
+  const [user, setUser] = useState<CurrentUser>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    console.log(`[useAuthGuard] useEffect running`);
     const token = getStoredToken();
+    const cachedUser = token ? getStoredUser() : null;
+
+    if (cachedUser) {
+        setUser(cachedUser);
+        setIsLoading(false); // Unblock rendering immediately if cache exists
+    }
 
     if (!token) {
-      // No token at all — redirect immediately, keep isLoading=true so nothing renders
+      console.log(`[useAuthGuard] No token found, redirecting to login...`);
       clearStoredAuth();
       setStoredUser(null);
       router.replace("/login");
@@ -60,11 +62,13 @@ export function useAuthGuard() {
     let isMounted = true;
 
     async function validateWithServer() {
+      console.log(`[useAuthGuard] Calling /api/auth/me to validate token`);
       try {
         const response = await apiFetch("/api/auth/me");
+        console.log(`[useAuthGuard] /api/auth/me responded with status: ${response.status}`);
 
-        // Only on explicit 401/403 do we treat the user as unauthenticated
         if (response.status === 401 || response.status === 403) {
+          console.error(`[useAuthGuard] 401/403 received, clearing auth and redirecting...`);
           if (isMounted) {
             clearStoredAuth();
             setStoredUser(null);
@@ -74,21 +78,22 @@ export function useAuthGuard() {
         }
 
         if (!response.ok) {
-          // Server error (5xx) or network error — don't log out, just keep cached user
-          if (isMounted) setIsLoading(false);
+          console.warn(`[useAuthGuard] Server error or network error, keeping cached user...`);
+          if (isMounted && !cachedUser) setIsLoading(false);
           return;
         }
 
         const data = await response.json();
+        console.log(`[useAuthGuard] Successfully validated token, updating user state`);
         if (isMounted) {
           const freshUser = data.user ?? null;
           setUser(freshUser);
           setStoredUser(freshUser);
           setIsLoading(false);
         }
-      } catch {
-        // Pure network failure — don't logout, just unblock with cached data
-        if (isMounted) setIsLoading(false);
+      } catch (e) {
+        console.error(`[useAuthGuard] Network failure validating token`, e);
+        if (isMounted && !cachedUser) setIsLoading(false);
       }
     }
 

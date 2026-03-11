@@ -183,6 +183,11 @@ export class CvatLikeViewer implements IViewer {
         this.canvas.height = clientHeight;
         this.model.setCanvasSize(clientWidth, clientHeight);
 
+        // If the canvas was resized (e.g. from 0x0 at mount), ensure the image is fit to the new view
+        if (this.imageBitmap) {
+            this.model.fit();
+        }
+
         this.requestRender();
     }
 
