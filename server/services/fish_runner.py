@@ -8,6 +8,7 @@ import math
 import io
 import json
 import pathlib
+import os
 from collections import defaultdict
 from contextlib import contextmanager
 
@@ -38,17 +39,26 @@ def _yolov5_path_ctx():
         if key == "utils" or key.startswith("utils."):
             evicted[key] = sys.modules.pop(key)
 
-    # ── 3. Patch PosixPath for models saved on Linux ──────────────────────────
-    original_posix = getattr(pathlib, "PosixPath", None)
-    pathlib.PosixPath = pathlib.WindowsPath
+    # ── 3. Patch Path classes for cross-platform model loading ───────────────
+    # If on Windows, we might need to handle models saved on Linux (PosixPath)
+    # If on Linux, we might need to handle models saved on Windows (WindowsPath)
+    original_posix   = getattr(pathlib, "PosixPath", None)
+    original_windows = getattr(pathlib, "WindowsPath", None)
+
+    if os.name == 'nt':
+        # On Windows, map PosixPath to WindowsPath
+        pathlib.PosixPath = pathlib.WindowsPath
+    else:
+        # On Linux/Posix, map WindowsPath to PosixPath
+        pathlib.WindowsPath = pathlib.PosixPath
 
     try:
         yield
     finally:
         sys.path[:] = original_path
         sys.modules.update(evicted)
-        if original_posix is not None:
-            pathlib.PosixPath = original_posix
+        pathlib.PosixPath   = original_posix
+        pathlib.WindowsPath = original_windows
 
 
 # ── User configs ─────────────────────────────────────────────────────────────
