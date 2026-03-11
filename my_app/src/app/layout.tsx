@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "IntelliClinix - Medical Image Annotation Platform",
-  description: "AI-powered medical image annotation platform with CVAT integration",
+  title: "IntelliClinix ",
+  description: "AI-powered medical image analysis",
 };
 
 export default function RootLayout({

@@ -134,7 +134,7 @@ export default function UploadPage() {
                 value={datasetName}
                 onChange={(e) => setDatasetName(e.target.value)}
                 className="mt-2 w-full rounded-lg border border-cvat-border bg-cvat-bg-secondary px-4 py-3 text-cvat-text-primary focus:border-cvat-primary focus:ring-cvat-primary"
-                placeholder="e.g. AL_16_22_ABL1"
+                placeholder="dataset name"
                 disabled={isSubmitting}
                 required
               />
@@ -152,7 +152,7 @@ export default function UploadPage() {
                 className="mt-2 w-full rounded-lg border border-cvat-border bg-cvat-bg-secondary px-4 py-3 text-cvat-text-primary focus:border-cvat-primary focus:ring-cvat-primary"
                 disabled={isSubmitting}
               >
-                <option value="">— No model selected —</option>
+                <option value="">select a model</option>
                 {models.map((model) => (
                   <option key={model._id} value={model._id}>
                     {model.name}

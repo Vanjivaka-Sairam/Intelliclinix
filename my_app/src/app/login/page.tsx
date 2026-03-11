@@ -80,7 +80,7 @@ export default function LoginPage() {
           <BrainCircuit className="h-12 w-12 text-cvat-primary mr-2" />
           <h1 className="text-5xl sm:text-6xl font-bold text-cvat-text-primary">IntelliClinix</h1>
         </div>
-        <p className="text-cvat-text-secondary text-lg">AI-Powered Medical Imaging Annotation</p>
+        <p className="text-cvat-text-secondary text-lg">AI-Powered Medical Image Analysis</p>
       </div>
 
       <Card className="w-full max-w-md cvat-card text-cvat-text-primary shadow-cvat">
@@ -164,7 +164,7 @@ export default function LoginPage() {
       </Card>
 
       <div className="mt-8 text-center text-cvat-text-tertiary text-sm max-w-md">
-        <p>IntelliClinix uses advanced ML algorithms to enhance medical imaging annotation accuracy and efficiency.</p>
+        <p></p>
       </div>
     </div>
   )
