@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Loader2, UploadCloud } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
@@ -103,14 +104,22 @@ export default function UploadPage() {
     <div className="min-h-screen bg-cvat-bg-primary">
       <div className="max-w-5xl mx-auto px-4 py-10">
         <div className="cvat-card p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <UploadCloud className="h-8 w-8 text-cvat-primary" />
-            <div>
-              <h1 className="text-2xl font-semibold text-cvat-text-primary">Upload Dataset</h1>
-              <p className="text-sm text-cvat-text-secondary">
-                Create a dataset of medical images for later inference.
-              </p>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <UploadCloud className="h-8 w-8 text-cvat-primary" />
+              <div>
+                <h1 className="text-2xl font-semibold text-cvat-text-primary">Upload Dataset</h1>
+                <p className="text-sm text-cvat-text-secondary">
+                  Create a dataset of medical images for later inference.
+                </p>
+              </div>
             </div>
+            <Link 
+              href="/upload/manage" 
+              className="px-4 py-2 text-sm font-medium border border-cvat-border rounded-lg text-cvat-text-secondary hover:text-cvat-primary hover:border-cvat-primary transition-colors"
+            >
+              Manage Datasets
+            </Link>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">

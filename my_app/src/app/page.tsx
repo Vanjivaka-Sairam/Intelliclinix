@@ -24,6 +24,7 @@ export default function Home() {
   const [datasetCount, setDatasetCount] = useState<number | null>(null);
   const [inferenceCount, setInferenceCount] = useState<number | null>(null);
   const [recentInferences, setRecentInferences] = useState<InferenceSummary[] | null>(null);
+  const [datasetMap, setDatasetMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isLoading) return;
@@ -38,6 +39,12 @@ export default function Home() {
         if (datasetsRes.ok) {
           const datasets: DatasetSummary[] = await datasetsRes.json();
           setDatasetCount(datasets.length);
+          
+          const map: Record<string, string> = {};
+          datasets.forEach((ds) => {
+            map[ds._id] = ds.name;
+          });
+          setDatasetMap(map);
         }
 
         if (inferencesRes.ok) {
@@ -170,7 +177,9 @@ export default function Home() {
                   <div>
                     <p className="text-cvat-text-primary font-medium">Job #{inference._id}</p>
                     <p className="text-sm text-cvat-text-secondary">
-                      Dataset: {inference.dataset_id}
+                      Dataset: {datasetMap[inference.dataset_id] || (
+                        <span className="font-mono">{inference.dataset_id.substring(0, 8)}...</span>
+                      )}
                     </p>
                   </div>
                   <span

@@ -29,6 +29,7 @@ export default function ResultsPage() {
   // New State for Models and Datasets Lookup
   const [modelsList, setModelsList] = useState<any[]>([]);
   const [datasetMap, setDatasetMap] = useState<Record<string, string>>({});
+  const [isMetadataLoaded, setIsMetadataLoaded] = useState(false);
 
   const [modelFilter, setModelFilter] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export default function ResultsPage() {
           setDatasetMap(map);
         }
       } catch (e) { console.warn('Failed to load datasets'); }
+      finally { setIsMetadataLoaded(true); }
     }
 
     loadMetaData();
@@ -252,12 +254,14 @@ export default function ResultsPage() {
                             </Link>
                           </td>
 
-                          {/* UPDATED: Dataset Name with ID fallback */}
+                          {/* UPDATED: Dataset Name with Loading Skeleton */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 font-medium">
-                            {datasetMap[record.dataset_id] || (
-                              <span className="text-slate-400 font-mono text-xs">
-                                {record.dataset_id.substring(0, 12)}...
-                              </span>
+                            {!isMetadataLoaded ? (
+                              <div className="h-4 w-24 bg-slate-200 animate-pulse rounded"></div>
+                            ) : (
+                              datasetMap[record.dataset_id] || (
+                                <span className="text-slate-400 italic text-xs">Unknown Dataset</span>
+                              )
                             )}
                           </td>
 

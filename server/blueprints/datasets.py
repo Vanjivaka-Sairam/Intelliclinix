@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from services.storage import save_file_to_gridfs # Images still use GridFS
+from services.storage import save_file_to_gridfs 
 from blueprints.models import get_model_by_id
 from services.inference_manager import start_managed_inference
 from bson.objectid import ObjectId
@@ -120,3 +120,49 @@ def list_datasets(current_user_id):
             f['gridfs_id'] = str(f['gridfs_id'])
 
     return jsonify(datasets), 200
+
+@datasets_bp.route('/<dataset_id>', methods=['DELETE'])
+@jwt_required
+def delete_dataset(current_user_id, dataset_id):
+    db = get_db()
+    
+    try:
+        dataset_obj_id = ObjectId(dataset_id)
+    except Exception:
+        return jsonify({"error": "Invalid dataset_id format"}), 400
+
+    dataset = db.datasets.find_one({"_id": dataset_obj_id})
+    if not dataset:
+        return jsonify({"error": "Dataset not found"}), 404
+
+    if str(dataset['owner_id']) != current_user_id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    # Delete dataset files from GridFS
+    try:
+        from db import get_fs
+        fs = get_fs()
+        for f in dataset.get('files', []):
+            if 'gridfs_id' in f:
+                fs.delete(ObjectId(f['gridfs_id']))
+    except Exception as e:
+        current_app.logger.error(f"Failed to delete files for dataset {dataset_id}: {e}")
+
+    associated_inferences = list(db.inferences.find({"dataset_id": dataset_obj_id}))
+    for inference in associated_inferences:
+        try:
+            for res in inference.get('results', []):
+                artifacts = res.get('artifacts', [])
+                for a in artifacts:
+                    gf = a.get('gridfs_id')
+                    if gf:
+                        fs.delete(ObjectId(gf))
+        except Exception as e:
+             current_app.logger.warning(f"Failed to delete gridfs file while deleting inference for dataset {dataset_id}: {e}")
+             
+    db.inferences.delete_many({"dataset_id": dataset_obj_id})
+    
+    # Finally, delete the dataset document
+    db.datasets.delete_one({"_id": dataset_obj_id})
+
+    return jsonify({"message": "Dataset deleted successfully"}), 200
